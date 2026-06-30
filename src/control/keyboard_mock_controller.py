@@ -63,8 +63,8 @@ if sys.platform == "win32":
 # FNAF 1 the camera flips up/down when the cursor touches the bottom CAMERA bar.
 # ---------------------------------------------------------------------------
 COORDS = {
-    "left_door":   (220, 540),   # nudged ~30px outward (toward left edge)
-    "right_door":  (1700, 540),  # nudged ~30px outward (toward right edge)
+    "left_door":   (220, 650),   # nudged ~30px outward (toward left edge)
+    "right_door":  (1700, 650),  # nudged ~30px outward (toward right edge)
     "left_light":  (105, 650),   # nudged ~45px outward
     "right_light": (1815, 650),  # nudged ~45px outward
     "monitor_bar": (1280, 1580),  # bottom-center "CAMERA" tab — HOVER to flip
