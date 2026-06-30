@@ -1,0 +1,45 @@
+# Claude / AI Usage Plan
+
+> This file states my **intent** for using Claude and other AI tools on this project. It is a living document and will be updated each week. The actual week-by-week record of what I used AI for lives in [AI-usage.md](AI-usage.md). The agent-context file that tells Claude its role and guardrails on this repo is at the repo root: [`CLAUDE.md`](../CLAUDE.md).
+
+## Guiding principle
+
+AI is used to **accelerate scaffolding and debugging, not to replace the learning objectives.** The whole point of this project (see [proposal.md](proposal.md) → "My Takeaway") is for *me* to internalize transfer learning and real-time model deployment. So I draw a hard line:
+
+- **AI may drive:** boilerplate, glue code, documentation, error-message triage, API lookups.
+- **I must drive:** the freezing/fine-tuning strategy, interpretation of training curves, the gesture→action design, and the real-time control tuning. AI is a *sounding board* for these, never the decision-maker.
+
+## Where I plan to use AI (AI-assisted)
+
+| Task | How AI helps | My oversight |
+|---|---|---|
+| Project/code scaffolding | Generate `Dataset`/`DataLoader`, transforms, argparse CLIs, plotting helpers | I review every line; I rename/restructure to match my mental model. |
+| HaGRID annotation parsing | Draft the JSON-schema parser from a sample record | I verify against the real files and check landmark/bbox normalization. |
+| Debugging | Interpret stack traces, CUDA/dtype/shape mismatches, dependency conflicts | I confirm the *root cause*, not just the patch. |
+| `timm`/HF API usage | Look up how to swap heads, freeze params, set discriminative LRs | I decide *which* layers and *why*. |
+| Input-simulation quirks | Explain why DirectX games ignore some synthetic clicks; suggest `pydirectinput` | I test registration in-game myself. |
+| Documentation | Draft docstrings, READMEs, this phase plan, the demo script | I fact-check claims and keep numbers honest. |
+| Code review | Spot bugs/simplifications in my diffs | I accept/reject each finding deliberately. |
+
+## Where I will NOT lean on AI (handled manually)
+
+- Choosing the **freezing schedule** and reading loss/accuracy curves to decide when to unfreeze.
+- Diagnosing **under- vs. over-fitting** and choosing the response (augmentation, regularization, LR).
+- Designing and tuning the **gesture → FNAF action mapping** and the **debounce/cooldown** logic — this is judgment built from playtesting, not from a prompt.
+- Final **evaluation honesty**: I report real test-set numbers, including failures.
+
+## Tools
+
+- **Claude Code** (primary) — in-repo agent for scaffolding, debugging, docs, and code review, governed by [`CLAUDE.md`](../CLAUDE.md).
+- **Claude (chat)** — design discussion and concept explanation (transfer learning, ONNX export).
+- Possible: Copilot-style inline completion for small boilerplate.
+
+## Honesty & attribution policy
+
+- Every non-trivial AI contribution is logged weekly in [AI-usage.md](AI-usage.md): the task, the prompt/context that worked, and any output I had to correct.
+- AI-generated code that I do not understand does not get merged. If I cannot explain it, I rewrite it until I can.
+- Commit messages note where AI materially shaped an implementation.
+
+## Weekly update cadence
+
+At the end of each week I will: (1) append that week's entry to `AI-usage.md`, and (2) revise this file if my intended usage changed (e.g. I leaned on AI more/less than planned, or a new tool entered the workflow).
