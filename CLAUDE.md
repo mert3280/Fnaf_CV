@@ -42,6 +42,7 @@ If a request would have you make one of these decisions outright, surface the tr
 - Don't merge code the human can't explain — if asked, simplify until it's understandable.
 - Run/lint before claiming something works; report real output, including failures.
 - When you used AI materially on an implementation, note it so it can be logged in [DOCS/AI-usage.md](DOCS/AI-usage.md).
+- **At the end of every session, append a dated entry to `daily-update.md` at the repo root** summarizing what was done that day (tasks completed, files changed, decisions made). Create the file if it doesn't exist yet.
 
 ## Pointers
 - **Architecture & decisions (read first for any "why"):** [DOCS/architecture-and-decisions.md](DOCS/architecture-and-decisions.md) — referenceable as `AD-NN`.
