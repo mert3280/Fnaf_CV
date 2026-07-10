@@ -1,0 +1,28 @@
+# Phase-2 baseline (AD-08 Stage A): the full intended model -- a pretrained
+# MobileNetV3 backbone (AD-07) with a fresh 8-class head, backbone FROZEN,
+# head-only training. No augmentation yet (AD-09 introduces it in Phase 3).
+# Data prep is governed separately by configs/data.yaml.
+
+data_config: configs/data.yaml
+
+model:
+  backbone: mobilenetv3_large_100   # the intended real-time backbone (AD-07)
+  num_classes: 8
+  freeze_backbone: true             # Stage A: head-only
+  pretrained: true
+
+train:
+  epochs: 40
+  lr: 0.001
+  weight_decay: 0.0001
+  optimizer: adamw
+  batch_size: 64
+  num_workers: 0   # CPU box: in-process decode beats multiproc IPC here; use >0 on the GPU box
+  seed: 42
+  augment_train: false              # baseline is un-augmented (AD-09 = Phase 3)
+  # Frozen backbone + no augmentation => backbone features are deterministic, so
+  # we cache them once and train the head as a linear probe (identical math,
+  # ~50x faster on CPU). Set false to force the standard end-to-end loop.
+  precompute_features: true
+
+out_dir: models/baseline_mnv3_large

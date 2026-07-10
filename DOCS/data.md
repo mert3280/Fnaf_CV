@@ -48,33 +48,76 @@ This avoids near-duplicate classes (`peace`/`peace_inverted`, etc.) that degrade
 
 | Variant | Resolution | Use | Status |
 |---|---|---|---|
-| **subsample** | ~1920px (full HaGRID) | Phase 1–2 fast iteration | downloading via `src/data/download_subsample.py` |
-| **512px** | 512px | Phase 3 final training | planned (Phase 3) |
+| **subsample** | ~1920px (full HaGRID) | **held-out test set** (~100/class) | downloaded via `src/data/download_subsample.py` |
+| **train_val** | ~1920px (full HaGRID) | **train + val pool** (1000/class) | downloaded via `src/data/download_train_val.py` |
+| **512px** | 512px | Phase 3 final training (optional) | planned (Phase 3) |
 | full | 1920px | — | **never download** (716 GB) |
 
-### How the subsample download works
+### How the downloads work
 
-The official HaGRID per-class ZIPs are 25–63 GB each. Rather than downloading everything, `src/data/download_subsample.py` uses **HTTP range requests** (`remotezip`) to fetch only the 100 images per class referenced in `ann_subsample/*.json` — no intermediate ZIP stored locally.
+The official HaGRID per-class ZIPs are 25–63 GB each. Rather than downloading everything, both scripts use **HTTP range requests** (`remotezip`) to fetch only the specific `{uuid}.jpg` entries they need out of `{class}.zip` — no intermediate ZIP stored locally.
 
 ```
-python src/data/download_subsample.py                        # all 8 working classes
-python src/data/download_subsample.py --classes like fist    # specific classes only
+# Test set — ~100 images/class referenced in ann_subsample
+python src/data/download_subsample.py
+
+# Train/val pool — 1000 images/class from ann_train_val, excluding the test UUIDs
+python src/data/download_train_val.py
+python src/data/download_train_val.py --classes like fist --per-class 50
+python src/data/download_train_val.py --no-download        # re-run dedup verification only
 ```
+
+`download_train_val.py` parallelizes across `--workers` (default 8) RemoteZip connections per class, since range requests are latency-bound.
 
 Source URL pattern: `https://rndml-team-cv.obs.ru-moscow-1.hc.sbercloud.ru/datasets/hagrid/hagrid_dataset_new_554800/hagrid_dataset/{class}.zip`
 
 ---
 
+## Train / val / test split (AD-16)
+
+The model split is a **single 70/15/15 split drawn at load time across ALL
+downloaded images** (`train_val` + `subsample`, 8594 total), **grouped by
+`user_id`** so no subject appears in two splits — an honest generalization test
+(AD-10). Which folder an image lives in no longer implies its split. Realized
+counts: **train 5919 / val 1273 / test 1402**. Full mechanics — index build,
+grouped-split guarantees, crop/normalize/augment, config reference — live in
+**[data-preparation.md](data-preparation.md)**.
+
+> The two on-disk folders below are just **where the pixels were downloaded**
+> (see history), not split roles. `download_*.py` still governs acquisition; the
+> split above governs what the model trains/evaluates on.
+
+### Download provenance — how the two folders stay byte-disjoint
+
+The images were pulled in two batches that are guaranteed not to share content,
+which is why they can be safely pooled and re-split:
+
+1. **Within a folder:** UUIDs are unique JSON keys, so no image is fetched twice.
+2. **Identity:** `download_train_val.py` **removes every `ann_subsample` UUID
+   from the `train_val` candidate pool** before selecting — so the two folders
+   share no UUID. (HaGRID's `ann_subsample` set is *not* disjoint from
+   `train_val`: 92–96 of each class's 100 subsample UUIDs come from it.)
+3. **Byte-level:** after downloading, the script MD5-hashes every `train_val`
+   and `subsample` image and reports/removes any content-identical file (a
+   `--no-download` run repeats just this check). Last run: **0 leaks, 0 dups.**
+
+Both downloads are deterministic for a given `--seed` (default 42).
+
+---
+
 ## Local image paths
 
-| Variant | Local path | Approx. size | Downloaded |
-|---|---|---|---|
-| subsample | `DATA/images/subsample/{class}/{uuid}.jpg` | ~160–400 MB (781 images) | [x] 2026-07-01 |
-| 512px | `DATA/images/512px/{class}/{uuid}.jpg` | ~12 GB | [ ] Phase 3 |
+| Variant | Local path | Role | Approx. size | Downloaded |
+|---|---|---|---|---|
+| subsample | `DATA/images/subsample/{class}/{uuid}.jpg` | split source (~781 images) | ~160–400 MB | [x] 2026-07-01 |
+| train_val | `DATA/images/train_val/{class}/{uuid}.jpg` | split source (7813 images) | ~2–4 GB | [x] 2026-07-06 |
+| 512px | `DATA/images/512px/{class}/{uuid}.jpg` | optional retrain | ~12 GB | [ ] Phase 3 |
 
-Images are **git-ignored**. To re-download the subsample from scratch, run the script above.
+Both image folders are pooled and re-split 70/15/15 by user at load time (see the split section above); the folder is no longer a split label.
 
-### Actual per-class counts (781/800, 97.6%)
+Images are **git-ignored**. To re-create either set from scratch, run its script above.
+
+### Test-set per-class counts (subsample: 781/800, 97.6%)
 
 | Class | Downloaded | Missing |
 |---|---|---|
@@ -87,7 +130,24 @@ Images are **git-ignored**. To re-download the subsample from scratch, run the s
 | dislike | 96 | 4 |
 | two_up | 93 | 7 |
 
-19 UUIDs from `ann_subsample/*.json` returned `KeyError` (not present in the sbercloud per-class ZIP) — likely a version drift between the `ann_subsample` annotation snapshot and the current dataset release. Not a bug in the download script; re-running it will not recover these. 781 images is sufficient for Phase 1 dataloader/EDA validation.
+19 UUIDs from `ann_subsample/*.json` returned `KeyError` (not present in the sbercloud per-class ZIP) — likely version drift between the `ann_subsample` annotation snapshot and the current dataset release. Not a bug in the download script; re-running it will not recover these.
+
+### Train/val per-class counts (7813/8000, 97.7%)
+
+Target 1000/class. As with the subsample, some UUIDs `KeyError` out of the sbercloud ZIP (version drift between the annotation snapshot and the current release) — 187 total.
+
+| Class | Downloaded | Missing-in-zip |
+|---|---|---|
+| fist | 997 | 3 |
+| ok | 994 | 6 |
+| mute | 990 | 10 |
+| palm | 984 | 16 |
+| like | 983 | 17 |
+| dislike | 982 | 18 |
+| one | 960 | 40 |
+| two_up | 923 | 77 |
+
+**Duplicate verification (MD5, 2026-07-06): 0 leaks, 0 intra-set duplicates across all 8 classes.** Re-run any time with `python src/data/download_train_val.py --no-download`.
 
 ---
 
@@ -108,3 +168,5 @@ Horizontal flip is **not label-safe for all 8 classes.** `like` (thumbs-up) and 
 | Date | Change |
 |---|---|
 | 2026-07-01 | File created; subsample download in progress. |
+| 2026-07-06 | Defined train/val/test split: subsample (781 imgs) → **test set**; new 1000/class pull from `ann_train_val` (excluding subsample UUIDs) → **train+val**, via `src/data/download_train_val.py`. Added identity- and byte-level dedup guarantees. |
+| 2026-07-08 | Built the data-prep pipeline (`src/data/{config,hagrid_annotations,splits,transforms,dataset}.py` + `configs/data.yaml`): index, **70/15/15 split grouped by `user_id`** across all images (no subject leakage), crop/normalize/augment, `HagridDataset` + `build_dataloaders`. Retired the fixed subsample-as-test design; both folders now pooled and re-split. Documented in [data-preparation.md](data-preparation.md). |

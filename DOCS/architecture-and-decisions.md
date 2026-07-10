@@ -128,6 +128,13 @@ Fnaf_CV/
 - **Alternatives:** Always crop (more moving parts up front); landmark-only model (different approach — AD-05).
 - **Consequences:** Preprocessing must support both modes behind one flag; the chosen mode must be identical at train and runtime.
 
+### AD-16 — 70/15/15 split grouped by user_id (across all images) · *Accepted*
+- **Context:** The data needs a train/val/test split. An earlier design kept the subsample images (781, ~9%) as a fixed held-out test set and split only the `train_val` pool. A 70/15/15 target can't be met that way (test is only ~9%), so all 8594 downloaded images are pooled and split together.
+- **Decision:** One **70/15/15** split drawn across **all images**, **grouped by `user_id`** (`GroupShuffleSplit`, two-stage) so no subject appears in more than one split. Seeded (`seed 42`), computed at load time — nothing moves on disk. Configurable via `configs/data.yaml → split.{train,val,test,group_by_user}`.
+- **Rationale:** HaGRID repeats the same person across many images; a per-image split would leak a subject's hands from train into test and inflate the score. Grouping by user makes **test a genuine unseen-subject estimate** (this is what AD-10 asks for). The 8594 images span 4124 users (median 1 img/user), so grouping barely perturbs class balance.
+- **Alternatives:** Keep the fixed subsample test (can't hit 15% test); plain class-stratified per-image split (exact proportions but subject leakage — dishonest test); k-fold CV (heavier, redundant for a 5-week scope).
+- **Consequences:** Realized sample proportions are **approximate** (measured train 68.9 / val 14.8 / test 16.3) because whole users stay together — deliberately *not* seed-tuned to fake exactness. The fixed subsample-as-test design (formerly under AD-03) is retired; `download_*.py` now only governs acquisition. Test is reported once (AD-10). Per-class balance verified healthy (val 139–183, test 161–188).
+
 ## Model & approach
 
 ### AD-05 — Transfer learning with a pretrained CNN (not landmark-only) · *Accepted*
@@ -227,3 +234,4 @@ Fnaf_CV/
 | 2026-06-30 | Initial architecture + AD-01…AD-15 recorded at planning stage. |
 | 2026-06-30 | AD-07 accepted: **MobileNetV3** selected as the backbone (resnet18 baseline, efficientnet_b0 fallback). |
 | 2026-06-30 | AD-02b accepted: **all training/eval/demo run locally on the RTX 4060 (8 GB) — no cloud/Colab.** Removed Colab fallback from proposal.md and schedule.md; AD-02 scoped downloads to the 8 working classes at 512px (~12 GB). |
+| 2026-07-08 | AD-16 accepted: **70/15/15 split grouped by `user_id`** across all images (no subject leakage); retired the fixed subsample-as-test design. Data-prep pipeline built under `src/data/` + `configs/data.yaml`; documented in [data-preparation.md](data-preparation.md). |

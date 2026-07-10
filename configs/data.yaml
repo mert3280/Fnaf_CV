@@ -1,0 +1,74 @@
+# Data-preparation config -- single source of truth for how HaGRID images are
+# turned into (train, val, test) DataLoaders. Consumed by src/data/*.
+# See DOCS/data-preparation.md for the rationale behind every value here.
+
+# ---------------------------------------------------------------------------
+# Image sources (relative to repo root). Images are git-ignored; see DOCS/data.md
+# for how they were downloaded. The 70/15/15 split is drawn across ALL of these
+# images by user_id -- the folder an image lives in no longer implies its split.
+# ---------------------------------------------------------------------------
+sources:
+  - {images: DATA/images/train_val, ann: DATA/ann_train_val}
+  - {images: DATA/images/subsample, ann: DATA/ann_subsample}
+manifest: DATA/splits/split_manifest.csv   # written split record (audit)
+
+# ---------------------------------------------------------------------------
+# Working class subset (AD-03). Order here defines label_idx (like=0 ... mute=7)
+# and is what the model head is sized to. Do not reorder without retraining.
+# ---------------------------------------------------------------------------
+classes: [like, dislike, fist, one, two_up, palm, ok, mute]
+
+# ---------------------------------------------------------------------------
+# Split (AD-16). Three-way 70/15/15 over ALL images, drawn BY user_id so no
+# person appears in two splits (no subject leakage -> honest test number, AD-10).
+# Seeded => identical split every run. Fractions must sum to 1.0.
+# ---------------------------------------------------------------------------
+split:
+  train: 0.70
+  val:   0.15
+  test:  0.15
+  seed: 42
+  group_by_user: true   # split on user_id; a subject lands in exactly one split
+  stratify: true        # keep per-class proportions across splits
+
+# ---------------------------------------------------------------------------
+# Input geometry. `size` and `normalize` are OVERRIDDEN at train time by the
+# backbone's own timm data_config when a backbone is passed to
+# build_dataloaders() -- these are the fallback / documented defaults.
+# crop_mode: full_frame (AD-04 baseline) | bbox (crop to hand bbox, padded).
+# Preprocessing MUST match the real-time loop exactly (see AD A.3).
+# ---------------------------------------------------------------------------
+input:
+  size: 224
+  crop_mode: full_frame   # full_frame | bbox
+  bbox_pad: 0.15          # fraction of bbox size added as padding when crop_mode=bbox
+
+normalize:                # ImageNet stats (pretrained backbones); timm may override
+  mean: [0.485, 0.456, 0.406]
+  std:  [0.229, 0.224, 0.225]
+
+# ---------------------------------------------------------------------------
+# Augmentation (train split only). Policy per AD-09: color/brightness/contrast
+# jitter, small rotation, random-resized-crop, slight translation. Horizontal
+# flip is label-safe for THIS 8-class subset (DOCS/data.md, AD-09) -- revisit
+# if the class list changes. Magnitudes below are starting points to tune in
+# Phase 3, not final values.
+# ---------------------------------------------------------------------------
+augment:
+  hflip: true
+  rotation_deg: 12
+  translate: 0.06         # max fractional translation (x and y)
+  rrc_scale: [0.75, 1.0]  # random-resized-crop area scale
+  brightness: 0.3
+  contrast: 0.3
+  saturation: 0.2
+  hue: 0.02
+
+# ---------------------------------------------------------------------------
+# DataLoader knobs. Tune batch_size to the 8 GB VRAM budget (AD-02b).
+# ---------------------------------------------------------------------------
+loader:
+  batch_size: 64
+  num_workers: 4
+  pin_memory: true
+  drop_last: false

@@ -1,0 +1,31 @@
+# Core ML / training
+torch>=2.10
+torchvision>=0.25
+timm>=1.0.19
+numpy
+pandas
+scikit-learn
+pyyaml
+pillow
+tqdm
+
+# Data download (HaGRID range-request pulls)
+remotezip
+
+# Logging / EDA
+tensorboard
+matplotlib
+
+# Real-time pipeline (Phases 4-5)
+opencv-python
+mediapipe
+pydirectinput
+
+# Export / inference (Phase 3+)
+onnx
+onnxruntime
+
+# Notes:
+# - Install torch/torchvision for your CUDA build from https://pytorch.org
+#   (the RTX 4060 training box uses a CUDA wheel; this repo was also run CPU-only).
+# - mediapipe is optional (AD-05): only needed if the bbox/MediaPipe cropper is used.
