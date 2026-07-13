@@ -128,3 +128,63 @@
 #### Decisions / notes for me to review
 - The report **carries forward** existing human-owned decisions (8-class subset, ≥90% test target, by-user split, crop adoption) rather than inventing new requirements — I should re-read §5 and confirm the requirement wording is mine.
 - Installed `nbconvert`/`ipykernel` locally to execute the notebook headlessly (dev tooling only, not a project dependency).
+
+## 2026-07-13
+
+**Focus:** Ran the Phase-3 §0 A/B — trained the **bbox-crop** frozen head-only model as the controlled counterpart to the 53% full-frame baseline (crop is the only variable).
+
+### Done
+- Added `configs/bbox_frozen.yaml` — identical to `baseline.yaml` (mobilenetv3_large_100, frozen backbone, head-only, no aug, seed 42, 40 epochs, linear-probe fast path) except `crop_mode: bbox` (via `data.yaml`); separate `out_dir` so the full-frame checkpoint is preserved.
+- Preserved the prior full-frame `results.md` as `DOCS/results_full_frame.md` before the run (train.py overwrites `DOCS/results.md` each time).
+- Trained on the CPU box (feature-caching pass ~19 img/s over 8594 imgs, then head trains in seconds). Split identical to baseline (train 5919 / val 1273 / test 1402, same by-user split).
+
+### Result (honest, by-user test)
+- **Test 91.65% / best val 94.03%** — vs full-frame **53.0% / 57.0%**. **+38.7 pts test** from cropping alone, backbone still frozen, no augmentation. Clears the ≥90% target at Stage A.
+- Confirms AD-04 (two-stage detect-and-crop) empirically — consistent with Viz-4 (median hand = 1.8% of frame). Checkpoint `models/bbox_frozen_mnv3_large/best.pt` (git-ignored).
+
+### Observations (for Ted to interpret — not decided)
+- Remaining confusions are the finger-count pairs: `one`↔`two_up` (17 + 14 off-diagonal; `one` weakest at 0.815 F1) and `ok`→`palm` (12) — same weak pairs as full-frame, much reduced.
+- Train ~99.7% vs val ~94% → some overfitting headroom; augmentation (§2) / unfreezing (§1 Stage B) are the levers, but already >90% frozen. **My call whether to pursue them.**
+- Honesty (§4): future unfreeze/aug sweeps select on **val**; treat this as the frozen-Stage-A test data point, don't re-tune against test.
+
+### Files changed
+- `configs/bbox_frozen.yaml` (new); `DOCS/results.md` (regenerated, bbox); `DOCS/results_full_frame.md` (new, preserved full-frame — later moved to `DOCS/models/baseline_mnv3_large/results.md`); `models/bbox_frozen_mnv3_large/best.pt` (git-ignored)
+
+### Note
+- Auto-generated `results.md` header still reads "Baseline … (frozen backbone, head-only)" and omits `crop_mode` — `write_report` is hardcoded and doesn't distinguish runs; consider stamping crop mode / config name so reports self-identify.
+
+### Also today — live webcam demo UI (AI-assisted scaffolding)
+- Added `src/rt/` real-time inference package to eyeball trained models live and swap them freely:
+  - `model_loader.py` — `load_checkpoint()` rebuilds any `best.pt` purely from its own metadata (backbone, classes, input size/mean/std/crop_mode). Switching models = point `--checkpoint` elsewhere; no code/config edits.
+  - `preprocess.py` — `Preprocessor` reuses the *same* `build_transforms(train=False, …)` as training so runtime preprocessing matches byte-for-byte (AD-A.3). `RoiCropper` = centered square ROI standing in for the training bbox when a `crop_mode="bbox"` model runs live (no annotation at runtime).
+  - `webcam_demo.py` — OpenCV capture loop with overlay (ROI box, top-k probability bars, FPS, live keys). `q/Esc` quit, `m` mirror, `r` toggle ROI. bbox models auto-enable ROI; full_frame use the whole frame.
+- Installed `opencv-python` (was already in `requirements.txt`, missing from this env).
+- Verified offline end-to-end (load → preprocess synthetic frame → predict) on **both** checkpoints and rendered the overlay to an image; the only untested surface is the literal camera grab (no camera/GUI in this environment).
+- Run: `python -m src.rt.webcam_demo --checkpoint models/bbox_frozen_mnv3_large/best.pt`
+- **For Ted:** ROI framing is a preprocessing-matching decision for bbox models — the fixed center square is a stand-in, not the eventual Phase-4 hand detector (MediaPipe / AD-05). Tune `--roi` to how tightly training cropped, or wire in a real detector later.
+
+### Also today (2) — baseline docs + the real two-stage MediaPipe detector (AD-04)
+**Documented the baseline model in its own subfolder** (`DOCS/models/`):
+- `DOCS/models/baseline_mnv3_large/README.md` — full record of the Phase-2 baseline (full_frame frozen head-only mnv3, 53.0% test): config snapshot, training method (linear-probe), results, per-class read, why it was superseded by bbox, reproduce/run commands.
+- Moved `DOCS/results_full_frame.md` → `DOCS/models/baseline_mnv3_large/results.md` (frozen auto-gen report); added `DOCS/models/README.md` index (baseline vs bbox, the AD-04 A/B).
+
+**Replaced the fixed ROI stand-in with the actual two-stage detect-then-classify pipeline (AD-04):**
+- `src/data/dataset.py` — extracted the crop geometry into module fn `padded_bbox_pixels(bbox, w, h, pad)`; `_crop_to_bbox` now calls it. **One source of truth** so the live crop is byte-identical to training (AD A.3). Verified byte-identical to the old inline formula over 1000 random cases.
+- `src/rt/detector.py` (new) — `HandDetector` wraps **MediaPipe Tasks `HandLandmarker`** (VIDEO mode): 21 landmarks → landmark-hull bbox → `padded_bbox_pixels` (same pad) → crop. `detect()`→`HandBox|None`, manages VIDEO timestamps internally, degenerate-box guard.
+- `src/rt/webcam_demo.py` — detector is now the **primary crop source**, auto-selected from the checkpoint's `crop_mode` (bbox→detector, full_frame→raw frame). No hand → **idle** (never classify a bad crop, per Phase-4). Keys: `d` toggle detector, `r` ROI fallback, `m` mirror, `q` quit. Draws the detected hand box + landmarks; prints a train/serve **mismatch warning** if detector/crop_mode disagree (AD A.3).
+- Env: installed `mediapipe` (0.10.35, Python 3.13 → **Tasks API only**, no legacy `mp.solutions`). Downloaded the model bundle to `models/mediapipe/hand_landmarker.task` (git-ignored; detector prints the download command if missing).
+
+**Honest finding for Ted to interpret (NOT decided — preprocessing/tightness is your call):**
+- On HaGRID stills: MediaPipe detects a hand in **~48%** of frames; when detected, the bbox model classifies the **MediaPipe crop at 71%** vs **91.7%** on HaGRID's *own* annotated crop. That ~20-pt drop is the **MediaPipe-box-vs-HaGRID-box tightness mismatch** AD-04 flagged. **Caveat:** HaGRID's far/blurry/side hands are a *pessimistic* proxy for the real use case (a hand held up close to the webcam) — expect both detection and classification to be markedly higher live. Levers if the gap bites: `--pad` (currently 0.15 to match training), possibly re-cropping training bboxes to MediaPipe-style tightness, or a small self-captured fine-tune. Happy to run a `--pad` sweep on request.
+
+### Files changed (this session)
+- New: `src/rt/{__init__,model_loader,preprocess,detector,webcam_demo}.py`; `DOCS/models/README.md`; `DOCS/models/baseline_mnv3_large/README.md`
+- Changed: `src/data/dataset.py` (extract `padded_bbox_pixels`); moved `results_full_frame.md` into `DOCS/models/baseline_mnv3_large/results.md`
+- Env/assets: `opencv-python`, `mediapipe` installed; `models/mediapipe/hand_landmarker.task` (git-ignored)
+
+### Also today (3) — first LIVE webcam test of the two-stage strategy + strategies folder
+- **Live-ran** `webcam_demo` on the bbox model with the MediaPipe detector. Clean run (exit 0), detector auto-enabled, **no train/serve mismatch warning** — two-stage pipeline confirmed end-to-end on a real camera.
+- **Live finding (Ted):** read gestures **well** overall; **notably more accurate with the hand held closer to the body (farther from cam)** and **worse when held close to the webcam.** Analysis: HaGRID hands are shot at conversational distance, so a hand near the body matches that distribution; a hand close to a wide webcam lens adds perspective foreshortening + odd aspect + soft focus the model never trained on. Consistent with the ~20-pt MediaPipe-crop gap measured earlier, plus a distance/perspective domain gap that only shows live. Not a pipeline bug — the classifier honestly reporting its at-a-distance training.
+- **Created `DOCS/strategies/`** — running history of approaches tried, with results:
+  - `README.md` (index + the 1→2 arc), `01-full-frame-single-stage.md` (Strategy 1, 53%, retired/fallback), `02-two-stage-mediapipe-crop.md` (Strategy 2, current — full build, results incl. the 92% annotated vs ~71% MediaPipe-crop gap, the live distance finding, and **6 ranked potential fixes** flagged as Ted's modeling calls: framing guideline, `--pad` tune / retrain-at-pad, perspective/scale aug (AD-09), self-captured fine-tune (AD-04 open Q), progressive unfreeze (AD-08 B), detection-confidence tuning).
+- New: `DOCS/strategies/{README,01-full-frame-single-stage,02-two-stage-mediapipe-crop}.md`
