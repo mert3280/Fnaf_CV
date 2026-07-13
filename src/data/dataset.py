@@ -20,6 +20,27 @@ from .splits import Splits, make_splits, write_manifest
 from .transforms import build_transforms, resolve_backbone_config
 
 
+def padded_bbox_pixels(
+    bbox, img_w: int, img_h: int, pad: float
+) -> tuple[int, int, int, int]:
+    """Normalized COCO `[x, y, w, h]` -> integer pixel `(left, top, right, bottom)`,
+    grown by `pad` * bbox-size on each side and clamped to the image.
+
+    THE single source of truth for the two-stage crop geometry (AD-04). Both the
+    offline crop (`HagridDataset._crop_to_bbox`) and the live MediaPipe cropper
+    (`src/rt/detector.py`) call this, so the runtime crop is byte-identical to
+    training -- the AD A.3 contract that keeps "great test acc, useless live"
+    from happening.
+    """
+    x, y, bw, bh = bbox
+    pad_w, pad_h = bw * pad, bh * pad
+    left = max(0.0, x - pad_w) * img_w
+    top = max(0.0, y - pad_h) * img_h
+    right = min(1.0, x + bw + pad_w) * img_w
+    bottom = min(1.0, y + bh + pad_h) * img_h
+    return int(left), int(top), int(right), int(bottom)
+
+
 class HagridDataset(Dataset):
     """One split's images. crop_mode 'full_frame' uses the whole image; 'bbox'
     crops to the (padded) hand bbox before the transform (AD-04)."""
@@ -40,17 +61,13 @@ class HagridDataset(Dataset):
         return len(self.index)
 
     def _crop_to_bbox(self, img: Image.Image, bbox) -> Image.Image:
-        """bbox is normalized COCO [x, y, w, h]; crop with padding, clamped."""
+        """bbox is normalized COCO [x, y, w, h]; crop with padding, clamped.
+        Geometry lives in `padded_bbox_pixels` so training and the live cropper
+        stay byte-identical (AD A.3)."""
         if bbox is None:
             return img  # no annotation -> fall back to full frame
         w_img, h_img = img.size
-        x, y, bw, bh = bbox
-        pad_w, pad_h = bw * self.bbox_pad, bh * self.bbox_pad
-        left = max(0.0, x - pad_w) * w_img
-        top = max(0.0, y - pad_h) * h_img
-        right = min(1.0, x + bw + pad_w) * w_img
-        bottom = min(1.0, y + bh + pad_h) * h_img
-        return img.crop((int(left), int(top), int(right), int(bottom)))
+        return img.crop(padded_bbox_pixels(bbox, w_img, h_img, self.bbox_pad))
 
     def __getitem__(self, i: int):
         row = self.index.iloc[i]

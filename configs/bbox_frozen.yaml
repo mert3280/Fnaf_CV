@@ -1,0 +1,29 @@
+# Phase-3 §0 A/B -- the bbox counterpart to the full-frame baseline (AD-04).
+# IDENTICAL to configs/baseline.yaml except the input crop_mode, which comes
+# from data.yaml (crop_mode: bbox). Same backbone / seed / epochs / split /
+# freeze policy, so any accuracy delta vs. the 53% full-frame baseline is
+# attributable to cropping the hand and nothing else.
+#
+# Stage A (AD-08): backbone FROZEN, head-only. Frozen + no-aug => the linear-
+# probe fast path (cache backbone features once, train the head on them).
+
+data_config: configs/data.yaml   # crop_mode: bbox lives here
+
+model:
+  backbone: mobilenetv3_large_100   # same backbone as the baseline (AD-07)
+  num_classes: 8
+  freeze_backbone: true             # Stage A: head-only
+  pretrained: true
+
+train:
+  epochs: 40
+  lr: 0.001
+  weight_decay: 0.0001
+  optimizer: adamw
+  batch_size: 64
+  num_workers: 0   # CPU box: in-process decode beats multiproc IPC here
+  seed: 42
+  augment_train: false              # keep the A/B clean: crop is the only change
+  precompute_features: true         # frozen + no aug => cache features, linear-probe
+
+out_dir: models/bbox_frozen_mnv3_large
