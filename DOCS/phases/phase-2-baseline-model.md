@@ -4,6 +4,8 @@
 
 > This phase is the heart of the project's learning objective (transfer learning). I drive the layer/freezing decisions; AI assists only with scaffolding and debugging (see [../Claude.md](../Claude.md)).
 
+> **Outcome (2026-07-12):** the first baseline ran `full_frame` (`mobilenetv3_large_100`, frozen) → **57% val / 53% test** ([../results.md](../results.md)). That result — the hand occupies <5% of a typical frame — motivated adopting the **two-stage detect-and-crop pipeline** ([AD-04](../architecture-and-decisions.md)) going into Phase 3. Re-run the frozen baseline with `crop_mode: bbox` as the head of the Phase-3 A/B.
+
 ---
 
 ## 1. Approach: take a general model, swap the head, freeze the body

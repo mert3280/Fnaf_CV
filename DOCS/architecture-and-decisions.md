@@ -13,18 +13,18 @@ This document records **how the system is built** (Part A — Architecture) and 
 
 ## A.1 System overview
 
-The system is a **real-time perception → decision → actuation loop**. A webcam streams frames; a CNN classifies the hand gesture in each frame; a smoothing layer converts noisy per-frame predictions into stable discrete *gesture events*; a mode-aware controller maps events to FNAF actions; an input-simulation layer issues the corresponding mouse clicks to the real game.
+The system is a **real-time perception → decision → actuation loop**. A webcam streams frames; a **hand detector (MediaPipe) finds and crops the hand** in each frame; a CNN classifies the gesture in that crop; a smoothing layer converts noisy per-frame predictions into stable discrete *gesture events*; a mode-aware controller maps events to FNAF actions; an input-simulation layer issues the corresponding mouse clicks to the real game. This **two-stage detect-then-classify** design is AD-04.
 
 ```
                          ┌──────────────────────── OFFLINE (Phases 1–3) ────────────────────────┐
    HaGRID annotations ─▶ Data pipeline ─▶ timm backbone + custom head ─▶ fine-tune ─▶ export
-   (DATA/ JSON)          (parse/crop)     (transfer learning)            (TorchScript/ONNX)  │
-                                                                                            │ model artifact
+   (DATA/ JSON: bbox)    (parse/crop-to-  (transfer learning)            (TorchScript/ONNX)  │
+                          hand bbox)                                                         │ model artifact
                          ┌──────────────────────── ONLINE  (Phases 4–5) ────────────────────┼──────────┐
                          ▼                                                                   ▼          │
-   Webcam ─▶ Capture ─▶ Preprocess ─▶ Inference ─▶ Smoothing/Debounce ─▶ Controller ─▶ Input ─▶ FNAF
-   (OpenCV)  (frame)    (resize/norm/  (exported    (N-frame vote,        (Office/Cam   sim     (Steam,
-                         optional crop) model)       cooldown, idle)       state machine)(pydirectinput) DirectX)
+   Webcam ─▶ Capture ─▶ Detect+Crop ─▶ Preprocess ─▶ Inference ─▶ Smoothing/Debounce ─▶ Controller ─▶ Input ─▶ FNAF
+   (OpenCV)  (frame)    (MediaPipe      (resize/norm) (exported    (N-frame vote,        (Office/Cam   sim   (Steam,
+                         hand bbox)                    model)       cooldown, idle)       state machine)(pydirectinput)
                                                           │
                                                           ▼
                                                    Debug HUD overlay
@@ -46,7 +46,8 @@ The system is a **real-time perception → decision → actuation loop**. A webc
 | Component | Module (planned) | Responsibility |
 |---|---|---|
 | Capture | `src/rt/capture.py` | OpenCV webcam loop, mirroring, frame timing. |
-| Preprocess | `src/rt/preprocess.py` | Match training transforms exactly; optional MediaPipe crop. |
+| Detector | `src/rt/detector.py` | **MediaPipe Hands → hand bbox per frame; crop (+`bbox_pad`) before classify (AD-04).** No-hand → idle. Toggle via `runtime.use_detector`. |
+| Preprocess | `src/rt/preprocess.py` | Match training transforms **exactly** (size, norm, crop policy); operates on the detector crop. |
 | Inference | `src/rt/infer.py` | Run exported model; return `(label, confidence)`. |
 | Smoothing | `src/rt/smoothing.py` | N-frame majority vote, confidence gate, per-action cooldown, idle. |
 | Controller | `src/control/controller.py` | Office/Camera **state machine**; gesture event → action. |
@@ -56,15 +57,15 @@ The system is a **real-time perception → decision → actuation loop**. A webc
 
 ## A.3 Data flow & contracts
 
-- **Training sample:** `image (H×W×3 uint8)` + `label ∈ working_subset` → transform → `tensor (3×S×S float)`, normalized with the backbone's stats.
+- **Training sample:** `image (H×W×3 uint8)` → **crop to the hand bbox (+15% pad, AD-04)** → `label ∈ working_subset` → transform → `tensor (3×S×S float)`, normalized with the backbone's stats. (`crop_mode: full_frame` skips the crop — see the AD-04 switching note.)
 - **Model I/O:** input `tensor (B×3×S×S)` → logits `(B×N)` → softmax → `(label, confidence)`.
 - **Gesture event:** emitted only when the smoothing layer confirms a gesture held ≥ N frames above the confidence threshold and the action is off cooldown. Events are **edge-triggered** (door/camera toggles) except lights, which may be **hold-to-activate**.
 - **Action:** controller maps `(mode, gesture_event)` → one FNAF action → one or more coordinate clicks via the input layer.
 
-The **critical contract**: preprocessing in `src/rt/preprocess.py` must be **byte-for-byte equivalent** to training transforms (size, interpolation, normalization, crop policy). Drift here is the most common cause of "great test accuracy, useless live."
+The **critical contract**: preprocessing in `src/rt/preprocess.py` must be **byte-for-byte equivalent** to training transforms (size, interpolation, normalization, crop policy). Drift here is the most common cause of "great test accuracy, useless live." With the two-stage pipeline this extends to the **crop source**: the live MediaPipe bbox must approximate the HaGRID training bbox (same relative tightness and `bbox_pad`), or the classifier is fed a distribution it never trained on. The runtime loads the mode from the checkpoint's saved config (A.5) and **refuses to run if the runtime `crop_mode`/detector setting doesn't match** what the model trained with.
 
 ## A.4 Runtime model (threads / timing)
-- Single capture→infer→act loop, target **≥ 15 FPS** end-to-end.
+- Single capture→**detect**→infer→act loop, target **≥ 15 FPS** end-to-end (the MediaPipe detector is part of this budget — measure its per-frame share in Phase 4, Day 1).
 - If inference stalls the loop, split capture (producer) and inference (consumer) across two threads with a 1-frame queue (drop stale frames — we want *latest*, not *all*).
 - Per-action **cooldowns** (≈0.5–1 s) prevent door flapping independent of frame rate.
 
@@ -121,12 +122,31 @@ Fnaf_CV/
 - **Alternatives:** All 18 (lower live reliability, no benefit); 3–4 classes (not enough actions for doors+lights+camera modes).
 - **Consequences:** Confusion matrix in Phase 2 may prompt swapping a class. Final subset is locked at end of Phase 1.
 
-### AD-04 — Full-frame classification first, bbox-crop as fallback · *Proposed (decide in Phase 2)*
-- **Context:** Classify the whole webcam frame, or crop to the hand first? HaGRID bboxes are available.
-- **Decision:** Start **full-frame**; switch to **bbox/MediaPipe crop** if the hand is too small in frame or accuracy is poor.
-- **Rationale:** Simpler pipeline first; avoids a detector dependency unless needed. Cropping tightens the input distribution and usually helps when the hand is small.
-- **Alternatives:** Always crop (more moving parts up front); landmark-only model (different approach — AD-05).
-- **Consequences:** Preprocessing must support both modes behind one flag; the chosen mode must be identical at train and runtime.
+### AD-04 — Two-stage pipeline: detect-and-crop the hand, then classify · *Accepted (supersedes the earlier full-frame-first stance)*
+- **Context:** Classify the whole webcam frame, or detect the hand and crop to it first? HaGRID ships a bbox per image offline; a live webcam has none. The Phase-2 frozen baseline settled the direction: `full_frame` `mobilenetv3_large_100` reached only **57% val / 53% test** (random 12.5%), and [data-preparation.md §4](data-preparation.md#4-cropping-ad-04) shows why — the hand occupies <5% of a typical HaGRID frame, so a frozen ImageNet backbone spends its receptive field on background.
+- **Decision:** Adopt a **two-stage detect-then-classify pipeline** as the primary approach.
+  - **Offline (train):** train the classifier on **bbox crops** — `crop_mode: bbox`, +15% pad — using HaGRID's annotated bbox.
+  - **Online (live):** a **hand detector, MediaPipe Hands**, produces a bbox each frame; we crop to it (same pad), then run the `timm` classifier on the crop.
+  - The classifier — the ML learning objective — is unchanged; only its **input** changes from full frame to hand crop.
+- **Rationale:** Cropping tightens the input distribution so the small backbone sees the hand at full resolution instead of a ~40px blob in a cluttered room — the highest-leverage fix for both the weak baseline and live robustness to background/position/distance. Using an **off-the-shelf** detector (MediaPipe) means **no second model to train**, so the transfer-learning deliverable stays fully intact (AD-05).
+- **Alternatives:** *Full-frame classification* — the earlier baseline; simpler, no detector dependency, but demonstrably weak here (kept behind the flag for the Phase-3 A/B and as a fallback). *Single detection-classifier* (YOLO-style, one model outputs box + class) — one pass, but it replaces transfer-learned classification with an object-detection objective, superseding AD-05's learning goal — rejected unless the learning goals change. *Landmark-only classifier* (AD-05) — low learning value.
+- **Consequences:** The runtime gains a **MediaPipe dependency and its per-frame latency**, which must fit the ≥15 FPS budget (Phase 4, measured Day 1). Train and runtime crop policy must be **byte-identical** (same pad, same square-vs-aspect handling) or live accuracy collapses — this is now the single most important preprocessing contract (§A.3). The choice is **confirmed by a controlled A/B in Phase 3** (train `full_frame` vs `bbox`, same seed/epochs/split, compare val accuracy + confusion matrix); if `bbox` does not clearly win, revert via the switching note below. Because everything sits behind one `crop_mode` flag plus a runtime detector toggle, reverting is a **config change, not a rewrite**.
+
+#### AD-04 · How to switch between full-frame and two-stage crop
+
+The whole reason this lives behind a flag is that the approach is reversible without touching model code. Switching is **three coordinated settings**, all config:
+
+| Layer | Full-frame (single-stage) | Two-stage crop (**current default**) |
+|---|---|---|
+| Training input | `configs/data.yaml → input.crop_mode: full_frame` | `input.crop_mode: bbox` (+ `bbox_pad: 0.15`) |
+| Runtime preprocess | `src/rt/preprocess.py`: resize the raw frame | MediaPipe → crop bbox (+`bbox_pad`) → resize |
+| Runtime toggle | `configs/*.yaml → runtime.use_detector: false` | `runtime.use_detector: true` |
+
+**The rule that makes it safe:** the runtime `crop_mode`/detector setting **must match the loaded checkpoint's training mode** — a crop-trained model fed full frames (or vice-versa) sees an unfamiliar distribution and misbehaves. Each checkpoint saves its training config next to it (§A.5); the runtime reads that and refuses to start in a mismatched mode, so you can't silently pair the wrong two halves.
+
+**To run the A/B (Phase 3):** train two checkpoints identical except `crop_mode`, same seed/epochs/split; compare val accuracy + confusion matrix. Adopt the winner project-wide by flipping the three settings above.
+
+**Going to a *single* model with no detector at all** means either accepting `full_frame`'s accuracy ceiling, or moving to a detection-classifier (YOLO-style) — but the latter is a different training objective (object detection, not transfer-learned classification) and would supersede AD-05, so it's out of scope unless the course's learning goals change.
 
 ### AD-16 — 70/15/15 split grouped by user_id (across all images) · *Accepted*
 - **Context:** The data needs a train/val/test split. An earlier design kept the subsample images (781, ~9%) as a fixed held-out test set and split only the `train_val` pool. A 70/15/15 target can't be met that way (test is only ~9%), so all 8594 downloaded images are pooled and split together.
@@ -141,8 +161,8 @@ Fnaf_CV/
 - **Context:** Two viable routes: (a) train an **image classifier** via transfer learning; (b) feed **MediaPipe 21-landmarks** to a tiny classifier.
 - **Decision:** **Image classifier via transfer learning** (timm/HF) is the core ML deliverable.
 - **Rationale:** This is an "ML Projects" course — the stated learning goal is *end-to-end transfer learning* (freezing, head-swapping, staged fine-tuning). Landmark-only delegates the hard vision to Google's pretrained model and yields a trivial classifier with little learning value.
-- **Alternatives:** Landmark + small classifier (faster/robust but low learning value); hybrid MediaPipe-crop → CNN (kept as a robustness option, see AD-04/AD-12).
-- **Consequences:** More training work and a real train/serve gap to manage — which is exactly the intended learning. MediaPipe remains available *only* as an optional cropper, not the classifier.
+- **Alternatives:** Landmark + small classifier (faster/robust but low learning value); hybrid MediaPipe-crop → CNN — **now the adopted primary pipeline (AD-04)**.
+- **Consequences:** More training work and a real train/serve gap to manage — which is exactly the intended learning. MediaPipe is used as the **runtime hand cropper** (AD-04), **not** the classifier — the transfer-learned CNN remains the ML deliverable.
 
 ### AD-06 — `timm` + Hugging Face for backbones · *Accepted*
 - **Context:** Need pretrained backbones and an idiomatic fine-tuning workflow.
@@ -223,7 +243,7 @@ Fnaf_CV/
 ---
 
 ## Open questions (to resolve as phases land)
-- **AD-04** full-frame vs. crop — decide after the Phase 2 baseline confusion matrix.
+- **AD-04** resolved: **two-stage detect-and-crop** adopted as primary (the 57% `full_frame` Phase-2 baseline motivated it); the Phase-3 A/B confirms `bbox` vs `full_frame` before locking it. Open sub-question: does MediaPipe's latency fit the ≥15 FPS budget (Phase 4, Day 1)?
 - **AD-07** backbone decided: **MobileNetV3** (Accepted). Phase 3 sweep validates it vs. `resnet18` baseline and `efficientnet_b0` fallback.
 - **AD-11** TorchScript vs. ONNX — pick whichever hits the latency budget with clean parity.
 - Whether a **small self-captured fine-tune** (my hands, my room) is needed to close the train/serve gap (Phase 5).
@@ -235,3 +255,4 @@ Fnaf_CV/
 | 2026-06-30 | AD-07 accepted: **MobileNetV3** selected as the backbone (resnet18 baseline, efficientnet_b0 fallback). |
 | 2026-06-30 | AD-02b accepted: **all training/eval/demo run locally on the RTX 4060 (8 GB) — no cloud/Colab.** Removed Colab fallback from proposal.md and schedule.md; AD-02 scoped downloads to the 8 working classes at 512px (~12 GB). |
 | 2026-07-08 | AD-16 accepted: **70/15/15 split grouped by `user_id`** across all images (no subject leakage); retired the fixed subsample-as-test design. Data-prep pipeline built under `src/data/` + `configs/data.yaml`; documented in [data-preparation.md](data-preparation.md). |
+| 2026-07-12 | **AD-04 accepted as a two-stage detect-then-classify pipeline** (MediaPipe hand crop → `timm` classifier), superseding the earlier full-frame-first stance — motivated by the 57% `full_frame` Phase-2 baseline. Default `crop_mode` flipped to `bbox` in `configs/data.yaml`; added the AD-04 switching how-to; updated Part A (system overview, components, contracts, runtime budget), AD-05, and phases 1/3/4 + overview. Full-frame kept behind the flag for the Phase-3 A/B and as a fallback. |

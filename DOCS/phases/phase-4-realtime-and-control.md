@@ -7,16 +7,18 @@
 ## 1. Real-time pipeline
 
 ```
-Webcam (OpenCV) → preprocess → model → smoothing/debounce → gesture event
+Webcam (OpenCV) → MediaPipe detect+crop → preprocess → model → smoothing/debounce → gesture event
        → mode-aware controller → simulated mouse input → FNAF
                        ↘ HUD overlay (gesture, confidence, mode)
 ```
 
-### 1.1 Capture & preprocess
+### 1.1 Capture, detect & preprocess
 - [ ] OpenCV `VideoCapture` loop; mirror the frame for natural interaction.
-- [ ] Match Phase 3 preprocessing exactly (size, normalization, crop vs. full-frame).
-- [ ] **Optional MediaPipe crop:** if full-frame accuracy is poor live, detect the hand and crop before classifying (already in the stack). Decide based on live behavior.
-- [ ] Target **≥ 15 FPS** end-to-end; use the exported model (ONNX Runtime / TorchScript) and a small backbone.
+- [ ] **MediaPipe hand detection (`src/rt/detector.py`, AD-04) — the primary path:** detect the hand each frame, take its bbox, crop with the **same `bbox_pad` the classifier trained on**, then hand the crop to preprocess. The model was trained on crops (Phase 3), so it *requires* this.
+- [ ] Match Phase 3 preprocessing exactly (size, normalization, crop policy) — **read the mode from the checkpoint's sidecar config and refuse to run if it mismatches** (§A.3).
+- [ ] **No hand / low-confidence detection → emit the idle state** (`mute`); never classify a bad crop.
+- [ ] Fallback (`runtime.use_detector: false`): full-frame preprocess — only for a `full_frame`-trained checkpoint, or if MediaPipe latency blows the budget (AD-04 switching note).
+- [ ] Target **≥ 15 FPS** end-to-end **including detection**; use the exported model (ONNX Runtime / TorchScript) and a small backbone. **Measure the detector's share of the frame budget on Day 1** alongside the input-registration test.
 
 ### 1.2 Temporal smoothing & debounce (critical for usability)
 A raw per-frame classifier "chatters." Stabilize it:
@@ -42,7 +44,7 @@ FNAF is DirectX; synthetic input is the highest-risk integration point.
 - [ ] Overlay window showing current raw gesture, smoothed gesture, confidence, active mode, and last action fired. Essential for tuning thresholds and for the demo.
 
 ## 5. Deliverables
-- Real-time webcam → gesture → action loop at interactive FPS.
+- Real-time webcam → **MediaPipe crop** → gesture → action loop at interactive FPS (detector cost measured against the ≥15 FPS budget).
 - Mode-aware controller + `fnaf_layout.yaml` coordinate map.
 - Verified in-game input registration + kill-switch.
 - Debug HUD.

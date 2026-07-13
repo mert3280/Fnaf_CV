@@ -196,12 +196,15 @@ healthy (val 139–183, test 161–188).
 `crop_mode` (config) selects what the model sees, applied **before** the
 transform:
 
-- **`full_frame`** *(default / baseline)* — the whole image, resized to the
-  model input. Simplest; no detector dependency.
-- **`bbox`** — crop to the class's hand bbox with `bbox_pad` (default 0.15 =
-  15% padding on each side), clamped to the image, then resize. Tightens the
-  input distribution when the hand is small. Falls back to full frame if a row
-  has no bbox.
+- **`bbox`** *(default / primary — AD-04)* — crop to the class's hand bbox with
+  `bbox_pad` (default 0.15 = 15% padding on each side), clamped to the image,
+  then resize. Tightens the input distribution so the hand fills the tensor;
+  this is the offline half of the **two-stage detect-and-crop pipeline**, and it
+  mirrors what the live MediaPipe cropper feeds the model. Falls back to full
+  frame if a row has no bbox.
+- **`full_frame`** — the whole image, resized to the model input. Simplest, no
+  detector dependency, but the Phase-2 baseline showed it is weak here (below);
+  kept behind the flag for the Phase-3 A/B and as a fallback.
 
 Whatever is chosen **must be identical in the real-time loop** (`src/rt/preprocess.py`)
 — this is the single most common cause of "great test accuracy, useless live"
@@ -237,13 +240,15 @@ trained to recognize whole objects/scenes, not to find a small hand shape
 buried in 95%+ background — so `full_frame` wastes most of its pretrained
 features on the wrong part of the image.
 
-This is *evidence for a hypothesis*, not a conclusion — AD-04 explicitly defers
-the full_frame-vs-crop decision to a controlled comparison (train both modes,
-same seed/epochs/split, compare val accuracy and the confusion matrix) rather
-than switching on the strength of one picture. If bbox-crop wins, it also
-becomes a **runtime requirement**: the live loop would need a hand detector
-(e.g. MediaPipe, kept optional per AD-05) to produce a bbox before every frame,
-which full_frame doesn't need.
+On that evidence, **AD-04 now adopts the two-stage detect-and-crop pipeline as
+the primary approach** — `crop_mode: bbox` is the default here, and the live loop
+gains a **MediaPipe hand detector** to produce a bbox before every frame (the
+online half of the same pipeline). The `full_frame` path stays behind the flag
+and is still put through a **controlled A/B in Phase 3** (train both modes, same
+seed/epochs/split, compare val accuracy + confusion matrix) so the switch is
+*confirmed*, not taken on the strength of one picture. Reverting, if the A/B
+surprises us, is the three-setting config change in the
+[AD-04 switching note](architecture-and-decisions.md#ad-04--how-to-switch-between-full-frame-and-two-stage-crop).
 
 ---
 
@@ -313,7 +318,7 @@ through `DataConfig.from_yaml()`. Key fields:
 | `split.seed` | `42` | reproducibility |
 | `split.stratify` | `true` | per-class proportions (per-image splits only) |
 | `input.size` | `224` | overridden by backbone data_config |
-| `input.crop_mode` | `full_frame` | `full_frame` \| `bbox` (AD-04) |
+| `input.crop_mode` | `bbox` | `bbox` (two-stage, default) \| `full_frame` (baseline/fallback) — AD-04 |
 | `input.bbox_pad` | `0.15` | padding when `crop_mode: bbox` |
 | `normalize.mean/std` | ImageNet | overridden by backbone data_config |
 | `augment.*` | see above | train split only (AD-09) |

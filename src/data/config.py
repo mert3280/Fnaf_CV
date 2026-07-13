@@ -30,7 +30,7 @@ class SplitCfg:
 @dataclass
 class InputCfg:
     size: int = 224
-    crop_mode: str = "full_frame"  # full_frame | bbox
+    crop_mode: str = "bbox"  # bbox (two-stage, default -- AD-04) | full_frame
     bbox_pad: float = 0.15
 
 

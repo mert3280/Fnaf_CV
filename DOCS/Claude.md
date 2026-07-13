@@ -43,3 +43,5 @@ AI is used to **accelerate scaffolding and debugging, not to replace the learnin
 ## Weekly update cadence
 
 At the end of each week I will: (1) append that week's entry to `AI-usage.md`, and (2) revise this file if my intended usage changed (e.g. I leaned on AI more/less than planned, or a new tool entered the workflow).
+
+**Week-2 note (2026-07-12):** usage matched the plan — AI drove the EDA notebook, the overfit-single-batch validation, and the data-understanding report scaffolding; I retained the modeling calls those docs report (crop adoption, by-user split, ≥90% target). The living plan now lives in [implementation-plan.md](implementation-plan.md), and the Week-2 deliverables in [week2/](week2/).

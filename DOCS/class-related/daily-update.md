@@ -91,3 +91,40 @@
 
 ### Decisions
 - Kept the daily log at `DOCS/class-related/daily-update.md` going forward (one file, chronological) instead of two logs with overlapping purposes.
+
+## 2026-07-12
+
+**Focus:** Design decision — pivoted the implementation plan from single-stage full-frame classification to a **two-stage detect-and-crop pipeline** (MediaPipe hand crop → `timm` classifier), and documented how to switch approaches.
+
+### Done
+- Discussed one-model vs. two-model architectures; chose **two-stage** (off-the-shelf MediaPipe detector for the crop, my transfer-learned classifier unchanged) so the ML learning objective stays intact while gaining webcam robustness. Motivated by the 57% `full_frame` Phase-2 baseline (hand is <5% of the frame).
+- **Rewrote AD-04** in `architecture-and-decisions.md` from "full-frame first, crop fallback (Proposed)" to "**two-stage detect-then-classify (Accepted)**", superseding the old stance. Added an explicit **"How to switch between full-frame and two-stage crop"** section (three coordinated config settings + the checkpoint/runtime mode-match rule).
+- Propagated the change through Part A (system overview, component table `+detector`, data-flow contracts, runtime FPS budget), AD-05 (MediaPipe = runtime cropper, not classifier), the open-questions and change-log.
+- Updated phases: Phase 1 (`crop_mode: bbox` now primary), Phase 2 (baseline outcome note), Phase 3 (added the `full_frame`-vs-`bbox` **A/B confirmation** §0 + record crop mode in the export sidecar), Phase 4 (MediaPipe crop is the primary path; measure detector latency Day 1), and `overview.md`.
+- Updated `data-preparation.md` §4 + config table (default now `bbox`).
+- Flipped the code/config default: `configs/data.yaml` and `src/data/config.py` `crop_mode` → `bbox`. Verified the config still parses (`crop_mode = bbox`); the bbox crop path already exists in `dataset.py`.
+
+### Files changed
+- `DOCS/architecture-and-decisions.md`, `DOCS/data-preparation.md`, `DOCS/phases/{overview,phase-1-setup-and-data,phase-2-baseline-model,phase-3-training-finetuning,phase-4-realtime-and-control}.md`
+- `configs/data.yaml`, `src/data/config.py`
+
+### Decisions
+- **Two-stage crop adopted as the primary approach**, but honesty preserved: the `full_frame`-vs-`bbox` A/B in Phase 3 still *confirms* it (not treated as already-proven), and the full-frame path stays behind the `crop_mode` flag as a one-config-change fallback.
+- AI (Claude) drafted the doc rewrite and config edits; I own the architecture decision itself (per `DOCS/Claude.md` — full-frame-vs-crop is a human-owned call).
+
+### Week-2 deliverables — data-understanding submission
+**Focus:** Produced the Week-2 "Data Understanding" deliverable set required by `DOCS/assignments/data_understanding.md`.
+
+#### Done
+- Built and **executed** `DOCS/week2/eda-notebook.ipynb` against the real `src/data` pipeline over all 8594 on-disk images — 5 visualizations (class balance, bbox overlays, resolution/aspect, relative hand area, overfit-single-batch curve) with written interpretations, figures saved to `DOCS/week2/figures/`.
+- **Overfit-a-single-batch test passed:** `mobilenetv3_large_100`, 5 samples, loss → 0.0000 / 100% batch acc — pipeline validated end-to-end.
+- Wrote `DOCS/week2/data-understanding-report.md` (rubric sections 1–5) with real numbers: **8594 usable images / 100% readable**, 4124 subjects, median hand = **1.8% of frame** (87.9% under 5%), 206 UUIDs (~2.3%) lost upstream to annotation/release version drift.
+- Documented the **honest deviation from Week 1**: no Airflow/scheduled ingestion (HaGRID is static) — replaced by the deterministic range-request downloader.
+- Created `DOCS/implementation-plan.md` (append-only living plan with finalized measurable R1–R8 + change log); added Week-2 entries to `DOCS/AI-usage.md` and a cadence note to `DOCS/Claude.md`.
+
+#### Files changed
+- `DOCS/week2/` (new: report, executed notebook, `figures/`), `DOCS/implementation-plan.md` (new), `DOCS/AI-usage.md`, `DOCS/Claude.md`
+
+#### Decisions / notes for me to review
+- The report **carries forward** existing human-owned decisions (8-class subset, ≥90% test target, by-user split, crop adoption) rather than inventing new requirements — I should re-read §5 and confirm the requirement wording is mine.
+- Installed `nbconvert`/`ipykernel` locally to execute the notebook headlessly (dev tooling only, not a project dependency).

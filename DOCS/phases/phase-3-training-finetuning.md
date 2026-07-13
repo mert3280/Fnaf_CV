@@ -4,6 +4,14 @@
 
 ---
 
+## 0. Confirm the input approach — `full_frame` vs `bbox` crop (AD-04)
+
+The plan adopts the **two-stage detect-and-crop** pipeline ([AD-04](../architecture-and-decisions.md)); this A/B is the controlled check that confirms it before the rest of the phase builds on it.
+
+- [ ] Train two checkpoints **identical except `input.crop_mode`** (`full_frame` vs `bbox`), same seed / epochs / split / backbone.
+- [ ] Compare **val accuracy + confusion matrix**; expect `bbox` to clearly beat the 57% `full_frame` baseline. Record both in [../results.md](../results.md).
+- [ ] Adopt the winner project-wide. If `bbox` wins (expected), all downstream fine-tuning uses crops and the runtime needs the MediaPipe cropper (Phase 4). If not, flip back per the AD-04 switching note — one config change.
+
 ## 1. Progressive unfreezing strategy
 
 The core fine-tuning technique. Unfreeze in stages, lowest learning rate on the earliest (most general) layers:
@@ -35,7 +43,8 @@ The core fine-tuning technique. Unfreeze in stages, lowest learning rate on the 
 ## 5. Export for inference
 - [ ] Export best model to **TorchScript** and/or **ONNX**.
 - [ ] **Parity smoke test:** exported model predictions must match the PyTorch model on a fixed batch (within tolerance).
-- [ ] Benchmark single-frame latency (CPU and GPU) — feeds the Phase 4 FPS budget.
+- [ ] **Record the `crop_mode` + `bbox_pad` in the exported artifact's sidecar config** so Phase 4 loads the matching preprocessing and refuses a mismatch (AD-04 / §A.3).
+- [ ] Benchmark single-frame latency (CPU and GPU) — feeds the Phase 4 FPS budget. Note: the runtime also pays the **MediaPipe detector** cost per frame (measured in Phase 4), not just this classifier.
 
 ## 6. Deliverables
 - Fine-tuned model beating the Phase 2 baseline.
@@ -49,4 +58,4 @@ Test accuracy ≥ **90%** on the working subset; exported model matches PyTorch 
 Test accuracy stuck below the usable threshold with no diagnosed cause, or the export path is blocked with no fallback (fallback = run plain PyTorch `eval()` in Phase 4).
 
 ## 9. Exit criteria → Phase 4
-A single exported model file + documented input pre-processing (size, normalization, crop vs. full-frame) + measured per-frame latency.
+A single exported model file + documented input pre-processing (size, normalization, **hand-crop policy + `bbox_pad`**, recorded in the artifact's sidecar) + measured per-frame latency. The `full_frame`-vs-`bbox` A/B (§0) is decided and its result logged.

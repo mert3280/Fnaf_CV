@@ -35,12 +35,14 @@ split:
 # Input geometry. `size` and `normalize` are OVERRIDDEN at train time by the
 # backbone's own timm data_config when a backbone is passed to
 # build_dataloaders() -- these are the fallback / documented defaults.
-# crop_mode: full_frame (AD-04 baseline) | bbox (crop to hand bbox, padded).
-# Preprocessing MUST match the real-time loop exactly (see AD A.3).
+# crop_mode: bbox (two-stage: detect+crop the hand, then classify -- AD-04 primary)
+#          | full_frame (single-stage baseline, kept for the Phase-3 A/B + fallback).
+# Preprocessing MUST match the real-time loop exactly (see AD A.3): a bbox-trained
+# checkpoint requires the MediaPipe cropper live; full_frame requires the raw frame.
 # ---------------------------------------------------------------------------
 input:
   size: 224
-  crop_mode: full_frame   # full_frame | bbox
+  crop_mode: bbox         # bbox (two-stage, default -- AD-04) | full_frame (baseline/fallback)
   bbox_pad: 0.15          # fraction of bbox size added as padding when crop_mode=bbox
 
 normalize:                # ImageNet stats (pretrained backbones); timm may override

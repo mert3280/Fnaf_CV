@@ -26,12 +26,12 @@
 
 ## Phase 3 — Full Training & Fine-Tuning
 **Goal:** Turn the baseline into a **deployable** model via staged fine-tuning, then export it.
-- **Core work:** **progressive unfreezing** (head → top blocks → optional full backbone) with **discriminative LRs** (`lr/10`–`lr/100` on backbone) + scheduler/early stopping; label-aware augmentation (careful flip — it changes `*_inverted` and left/right meaning); HP sweep picking best by **val**; **test split evaluated once** (per-class P/R/F1 + confusion matrix); export to **TorchScript/ONNX** with a parity smoke test + latency benchmark.
+- **Core work:** confirm the input approach via a **`full_frame`-vs-`bbox`-crop A/B (AD-04)**; **progressive unfreezing** (head → top blocks → optional full backbone) with **discriminative LRs** (`lr/10`–`lr/100` on backbone) + scheduler/early stopping; label-aware augmentation (careful flip — it changes `*_inverted` and left/right meaning); HP sweep picking best by **val**; **test split evaluated once** (per-class P/R/F1 + confusion matrix); export to **TorchScript/ONNX** with a parity smoke test + latency benchmark.
 - **Done when:** test acc ≥ **90%** on the subset, exported model matches PyTorch on a fixed sample, latency within the real-time budget.
 
 ## Phase 4 — Real-Time Inference & Game Control
 **Goal:** Connect a live webcam to the model and drive **actual FNAF**.
-- **Pipeline:** Webcam (OpenCV) → preprocess (must match Phase 3 exactly) → model → **smoothing/debounce** → gesture event → mode-aware controller → simulated mouse input → FNAF, with a debug HUD.
+- **Pipeline:** Webcam (OpenCV) → **MediaPipe detect+crop (AD-04)** → preprocess (must match Phase 3 exactly) → model → **smoothing/debounce** → gesture event → mode-aware controller → simulated mouse input → FNAF, with a debug HUD.
 - **Stabilization (critical):** N-frame majority vote, confidence threshold, per-action cooldown, explicit `mute` idle, edge- vs. level-triggered actions.
 - **Controller:** small state machine, `Office`/`Camera` modes (`palm` raises monitor, `fist` lowers it).
 - **Highest risk — de-risk Day 1:** FNAF is DirectX; **test `pydirectinput` click registration in-game on Day 1**, calibrate button coordinates in `configs/fnaf_layout.yaml`, and wire a global **kill-switch**.

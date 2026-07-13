@@ -51,9 +51,9 @@ Each JSON maps an **image UUID** → record:
 - [ ] Plan (don't fully download yet) the **512px** set for Phase 3.
 
 ### 2.4 PyTorch dataset
-- [ ] `src/data/dataset.py`: `HagridDataset(Dataset)` returning `(image_tensor, label_idx)`.
-  - Option A (baseline): classify the **full frame** resized to model input size.
-  - Option B (fallback): **crop to bbox** (optionally padded) before resize — more robust if the hand is small in frame.
+- [ ] `src/data/dataset.py`: `HagridDataset(Dataset)` returning `(image_tensor, label_idx)`, with `crop_mode` behind one flag:
+  - **Primary — `crop_mode: bbox` (AD-04):** **crop to the hand bbox** (+15% pad) before resize, so the hand fills the tensor. This is what the two-stage pipeline trains on, mirroring the live MediaPipe crop.
+  - **Alternative — `crop_mode: full_frame`:** classify the whole frame resized to model input — kept behind the same flag for the Phase-3 A/B and as a fallback.
 - [ ] Transforms: resize, normalize (ImageNet stats for pretrained backbones), train-time augmentation hooks (added in Phase 3).
 - [ ] `DataLoader` with sane `num_workers`/`pin_memory`.
 
