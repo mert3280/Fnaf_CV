@@ -277,3 +277,16 @@ _(Note: DOCS was reorganized into `build/`, `AI/`, `class-related/`, `models/` b
 - **Verified:** suite now **39 checks**, all passing — slow squeeze fires exactly once, one dropout mid-squeeze no longer cancels, sustained absence can't fire, constant gain across distance, fixed mode ignores scale.
 - Docs: new `03.1.1-live-robustness-fixes.md`; strategies README (3.1.1 row + arc); 3.1 page marked patched; AD-19 second amendment + AD-20 amendment + changelog.
 - Files — Changed: `src/rt/{detector,cursor,webcam_demo}.py`; `src/control/{click_fsm,play}.py`. New: the 03.1.1 strategy doc.
+
+## 2026-07-19
+
+### Week-3 deliverable (W3A1) — ML experimentation report + MLflow tracking
+- **Goal:** meet the Week-3 assignment deliverables (experiment tracking, evaluation, model selection, report).
+- **MLflow gap closed:** the project had tracked runs via self-describing checkpoints + frozen `results.md`, not MLflow. Decision (Ted): **retroactively log the three real experiments into MLflow** rather than re-train or skip it. New `scripts/mlflow_log_runs.py` logs `baseline`/`bbox_frozen`/`palmfist_frozen` with params from each `config.snapshot.json` and metrics transcribed verbatim from the committed `DOCS/models/<run>/results.md` (nothing invented); `scripts/mlflow_export_comparison.py` exports the run-comparison CSV + accuracy chart. Store `./mlruns` is git-ignored; the exported artifacts are committed under `week3/`.
+- **Report:** wrote `class-related/week3/ml-experimentation-report.md` (rubric §1 feature engineering, §2 experiment design, §3 three-run results, §4 model selection). Candidate for Week-4 tuning confirmed: `palmfist_frozen_mnv3_large`, with the honest train/serve caveat (0.9815 on HaGRID crops ≠ live/arm's-length accuracy).
+- **Docs updated in place:** `build/plan.md` (Week-3 update — on track, no roadmap change), `AI/Claude.md` (MLflow added to tools + Week-3 cadence note), `AI/AI-usage.md` (Week-3 entry).
+- **AI use:** Claude wrote the MLflow glue scripts and drafted the report/updates from existing decision records and real recorded numbers; the model-selection call and evaluation-honesty framing are Ted's. Log in `AI-usage.md` week 3.
+
+### Files changed
+- New: `scripts/mlflow_log_runs.py`; `scripts/mlflow_export_comparison.py`; `DOCS/class-related/week3/{ml-experimentation-report.md, mlflow-run-comparison.csv, mlflow-run-comparison.png}`
+- Changed: `DOCS/build/plan.md`; `DOCS/AI/Claude.md`; `DOCS/AI/AI-usage.md`; `.gitignore` (add `/mlruns/`)

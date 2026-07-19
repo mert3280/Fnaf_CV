@@ -32,6 +32,7 @@ AI is used to **accelerate scaffolding and debugging, not to replace the learnin
 
 - **Claude Code** (primary) — in-repo agent for scaffolding, debugging, docs, and code review, governed by [`CLAUDE.md`](../CLAUDE.md).
 - **Claude (chat)** — design discussion and concept explanation (transfer learning, ONNX export).
+- **MLflow** (added Week 3) — experiment store for the training runs. Claude wrote the logging/export glue (`scripts/mlflow_*.py`); **I own which metrics matter and the honesty of every number logged.**
 - Possible: Copilot-style inline completion for small boilerplate.
 
 ## Honesty & attribution policy
@@ -45,3 +46,5 @@ AI is used to **accelerate scaffolding and debugging, not to replace the learnin
 At the end of each week I will: (1) append that week's entry to `AI-usage.md`, and (2) revise this file if my intended usage changed (e.g. I leaned on AI more/less than planned, or a new tool entered the workflow).
 
 **Week-2 note (2026-07-12):** usage matched the plan — AI drove the EDA notebook, the overfit-single-batch validation, and the data-understanding report scaffolding; I retained the modeling calls those docs report (crop adoption, by-user split, ≥90% target). The living plan now lives in [implementation-plan.md](../legacy/phases/implementation-plan.md) *(moved to legacy with the 2026-07-14 pivot — current plan: [plan.md](../build/plan.md))*, and the Week-2 deliverables in [week2/](../class-related/week2/).
+
+**Week-3 note (2026-07-19):** one **new tool** entered the workflow — **MLflow** (logged above). Usage still matched the plan: AI wrote the MLflow logging/export glue and drafted the [ML experimentation report](../class-related/week3/ml-experimentation-report.md), but every logged number is a real recorded result (transcribed from `DOCS/models/`), and the **model-selection call** (`palmfist_frozen` → Week-4 tuning) and the **train/serve honesty caveat** are mine. Full detail in [AI-usage.md → Week 3](AI-usage.md).

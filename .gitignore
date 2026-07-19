@@ -1,4 +1,5 @@
 /DATA/
 /models/
+/mlruns/
 __pycache__/
 *.pyc

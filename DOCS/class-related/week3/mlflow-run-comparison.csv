@@ -1,0 +1,4 @@
+mlflow.runName,num_classes,crop_mode,backbone,freeze_backbone,epochs,lr,val_accuracy,test_accuracy,random_baseline,test_macro_f1,test_f1_palm,test_f1_fist
+baseline_mnv3_large,8,full_frame,mobilenetv3_large_100,True,40,0.001,0.5695,0.53,0.125,0.5303,0.4818,0.5876
+bbox_frozen_mnv3_large,8,bbox,mobilenetv3_large_100,True,40,0.001,0.9403,0.9165,0.125,0.9156,0.9347,0.9443
+palmfist_frozen_mnv3_large,2,bbox,mobilenetv3_large_100,True,40,0.001,0.9639,0.9815,0.5,0.9815,0.9812,0.9818
