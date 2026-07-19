@@ -4,10 +4,10 @@
 
 ## Guiding principle
 
-AI is used to **accelerate scaffolding and debugging, not to replace the learning objectives.** The whole point of this project (see [proposal.md](proposal.md) → "My Takeaway") is for *me* to internalize transfer learning and real-time model deployment. So I draw a hard line:
+AI is used to **accelerate scaffolding and debugging, not to replace the learning objectives.** The whole point of this project (see the original [proposal.md](../legacy/proposal.md) → "My Takeaway") is for *me* to internalize transfer learning and real-time model deployment. So I draw a hard line:
 
 - **AI may drive:** boilerplate, glue code, documentation, error-message triage, API lookups.
-- **I must drive:** the freezing/fine-tuning strategy, interpretation of training curves, the gesture→action design, and the real-time control tuning. AI is a *sounding board* for these, never the decision-maker.
+- **I must drive:** the freezing/fine-tuning strategy, interpretation of training curves, the control design (cursor mapping and click semantics — decided by me 2026-07-14, AD-17…AD-20), and the real-time control tuning. AI is a *sounding board* for these, never the decision-maker.
 
 ## Where I plan to use AI (AI-assisted)
 
@@ -25,7 +25,7 @@ AI is used to **accelerate scaffolding and debugging, not to replace the learnin
 
 - Choosing the **freezing schedule** and reading loss/accuracy curves to decide when to unfreeze.
 - Diagnosing **under- vs. over-fitting** and choosing the response (augmentation, regularization, LR).
-- Designing and tuning the **gesture → FNAF action mapping** and the **debounce/cooldown** logic — this is judgment built from playtesting, not from a prompt.
+- Designing and tuning the **cursor mapping** (control box, smoothing) and the **click-FSM debounce/cooldown** logic — this is judgment built from playtesting, not from a prompt.
 - Final **evaluation honesty**: I report real test-set numbers, including failures.
 
 ## Tools
@@ -44,4 +44,4 @@ AI is used to **accelerate scaffolding and debugging, not to replace the learnin
 
 At the end of each week I will: (1) append that week's entry to `AI-usage.md`, and (2) revise this file if my intended usage changed (e.g. I leaned on AI more/less than planned, or a new tool entered the workflow).
 
-**Week-2 note (2026-07-12):** usage matched the plan — AI drove the EDA notebook, the overfit-single-batch validation, and the data-understanding report scaffolding; I retained the modeling calls those docs report (crop adoption, by-user split, ≥90% target). The living plan now lives in [implementation-plan.md](implementation-plan.md), and the Week-2 deliverables in [week2/](week2/).
+**Week-2 note (2026-07-12):** usage matched the plan — AI drove the EDA notebook, the overfit-single-batch validation, and the data-understanding report scaffolding; I retained the modeling calls those docs report (crop adoption, by-user split, ≥90% target). The living plan now lives in [implementation-plan.md](../legacy/phases/implementation-plan.md) *(moved to legacy with the 2026-07-14 pivot — current plan: [plan.md](../build/plan.md))*, and the Week-2 deliverables in [week2/](../class-related/week2/).

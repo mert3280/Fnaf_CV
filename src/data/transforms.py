@@ -60,6 +60,10 @@ def build_transforms(
                 translate=(aug.translate, aug.translate),
             )
         )
+        # Strategy-2.1 fix #3: perspective warp for the webcam-close-hand gap.
+        # Off unless aug.perspective > 0, so the baseline/bbox runs are unchanged.
+        if getattr(aug, "perspective", 0.0) > 0.0:
+            ops.append(T.RandomPerspective(distortion_scale=aug.perspective, p=0.5))
         ops.append(
             T.ColorJitter(
                 brightness=aug.brightness,
@@ -68,6 +72,10 @@ def build_transforms(
                 hue=aug.hue,
             )
         )
+        # Strategy-2.1 fix #3: mild blur for fixed-focus webcam softness. Off by
+        # default; only added when aug.blur_sigma > 0.
+        if getattr(aug, "blur_sigma", 0.0) > 0.0:
+            ops.append(T.GaussianBlur(kernel_size=5, sigma=(0.1, aug.blur_sigma)))
         ops += [T.ToTensor(), T.Normalize(mean, std)]
         return T.Compose(ops)
 

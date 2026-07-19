@@ -1,8 +1,13 @@
 # Strategy 2 — Two-stage detect-then-classify (MediaPipe crop → CNN)
 
-**Status: current.** This is the active approach ([AD-04](../architecture-and-decisions.md#ad-04--two-stage-pipeline-detect-and-crop-the-hand-then-classify)).
-It replaced [Strategy 1](01-full-frame-single-stage.md) after the full-frame
-baseline showed the input — not the model — was the bottleneck.
+**Status: superseded by [Strategy 2.1](02.1-two-stage-robustness-fixes.md)** — the
+pipeline below is still the active pipeline; 2.1 is its hardening against the live
+distance gap found in the test at the bottom of this page. Read this page for the
+approach and results; read 2.1 for the fixes.
+
+This is the two-stage approach ([AD-04](../../architecture-and-decisions.md#ad-04--two-stage-pipeline-detect-and-crop-the-hand-then-classify)).
+It replaced [Strategy 1](../1-full-frame-single-model/01-full-frame-single-stage.md)
+after the full-frame baseline showed the input — not the model — was the bottleneck.
 
 ## The idea
 
@@ -17,7 +22,7 @@ Webcam frame ─▶ MediaPipe HandLandmarker ─▶ hand bbox ─▶ crop (+pad)
    finds the hand and gives 21 landmarks; we take their bounding box. No training —
    Google already solved "where is the hand."
 2. **Stage 2 — classify (ours).** The *same* transfer-learned CNN from Strategy 1
-   classifies the **crop**. This is the ML deliverable ([AD-05](../architecture-and-decisions.md#ad-05--transfer-learning-with-a-pretrained-cnn-not-landmark-only)) —
+   classifies the **crop**. This is the ML deliverable ([AD-05](../../architecture-and-decisions.md#ad-05--transfer-learning-with-a-pretrained-cnn-not-landmark-only)) —
    MediaPipe is only the cropper, not the classifier.
 
 The classifier's *input distribution* changed from "whole cluttered frame" to
@@ -37,11 +42,11 @@ The classifier's *input distribution* changed from "whole cluttered frame" to
 
 | Piece | File | Role |
 |---|---|---|
-| Detector | [`src/rt/detector.py`](../../src/rt/detector.py) | MediaPipe Tasks `HandLandmarker` (VIDEO mode) → `HandBox` (padded pixel box + landmarks). Returns `None` when no hand. |
-| **Shared crop geometry** | [`src/data/dataset.py`](../../src/data/dataset.py) `padded_bbox_pixels()` | One function computes the padded/clamped box. **Training and the live cropper both call it**, so the runtime crop is byte-identical to training (AD A.3). Verified identical to the old inline formula over 1000 random cases. |
-| Preprocess | [`src/rt/preprocess.py`](../../src/rt/preprocess.py) | Reuses training's exact `build_transforms(train=False, …)` — same resize/crop/normalize. |
-| Classifier loader | [`src/rt/model_loader.py`](../../src/rt/model_loader.py) | Rebuilds any checkpoint from its own metadata; crop source auto-selected from the saved `crop_mode`. |
-| Live UI | [`src/rt/webcam_demo.py`](../../src/rt/webcam_demo.py) | Webcam loop, detector crop, HUD (hand box, top-k bars, FPS), idle on no-hand, mismatch warning. |
+| Detector | [`src/rt/detector.py`](../../../../src/rt/detector.py) | MediaPipe Tasks `HandLandmarker` (VIDEO mode) → `HandBox` (padded pixel box + landmarks). Returns `None` when no hand. |
+| **Shared crop geometry** | [`src/data/dataset.py`](../../../../src/data/dataset.py) `padded_bbox_pixels()` | One function computes the padded/clamped box. **Training and the live cropper both call it**, so the runtime crop is byte-identical to training (AD A.3). Verified identical to the old inline formula over 1000 random cases. |
+| Preprocess | [`src/rt/preprocess.py`](../../../../src/rt/preprocess.py) | Reuses training's exact `build_transforms(train=False, …)` — same resize/crop/normalize. |
+| Classifier loader | [`src/rt/model_loader.py`](../../../../src/rt/model_loader.py) | Rebuilds any checkpoint from its own metadata; crop source auto-selected from the saved `crop_mode`. |
+| Live UI | [`src/rt/webcam_demo.py`](../../../../src/rt/webcam_demo.py) | Webcam loop, detector crop, HUD (hand box, top-k bars, FPS), idle on no-hand, mismatch warning. |
 
 - **Detector model bundle:** `models/mediapipe/hand_landmarker.task` (git-ignored;
   the detector prints the one-line download command if missing).
@@ -60,7 +65,7 @@ only the crop changed:
 | **Held-out test acc** | 0.5300 | **0.9165** | **+0.387** |
 
 The +39 pts came from cropping alone — the evidence base for AD-04. Full report:
-[DOCS/results.md](../results.md).
+[bbox results.md](../../../models/bbox_frozen_mnv3_large/results.md).
 
 ### The *live* crop (MediaPipe box) — the honest gap
 That 0.917 uses HaGRID's **own annotated** box. Live, the box comes from
@@ -108,6 +113,11 @@ bug in the pipeline — it's the classifier honestly reporting it was trained on
 at-a-distance hands.
 
 ## Potential fixes
+
+> **These are now built.** Every fix below has been implemented as code in
+> **[Strategy 2.1](02.1-two-stage-robustness-fixes.md)** — with the exact files,
+> commands, and which are live-now vs. opt-in-retrain. This section is the
+> original diagnosis; 2.1 is the implementation.
 
 Ordered cheapest → most involved. **The modeling choices here are Ted's to make**
 (freeze schedule, augmentation, data collection, tightness) — these are options

@@ -1,5 +1,13 @@
 # Data Preparation
 
+> **⚠ Scope pivot (2026-07-14, [AD-18](../architecture-and-decisions.md#ad-18--trim-training-classes-to-palm--fist)):**
+> the working class list is trimming from 8 classes to **`palm` + `fist`** for
+> the cursor-control design ([Strategy 3](../strategies/3-cursor-and-click/03-cursor-and-click.md)).
+> The *pipeline* documented here is unchanged — only `configs/data.yaml →
+> classes:` shrinks. The 8-class split counts and flip-safety notes below
+> describe the pre-pivot configuration and stay valid for the existing
+> checkpoints; this page's tables get regenerated when the binary retrain runs.
+
 **What happens to a HaGRID image between disk and the model.** This documents
 the full offline data-prep pipeline: indexing, the train/val/test split and its
 percentages, cropping, normalization, and augmentation. It is the companion to

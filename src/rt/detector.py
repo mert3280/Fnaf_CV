@@ -44,11 +44,25 @@ class HandBox:
     bbox_norm: tuple[float, float, float, float]  # COCO [x, y, w, h] over landmark hull
     box_px: tuple[int, int, int, int]             # padded (l, t, r, b), == training geometry
     score: float                                  # detection/handedness confidence
-    landmarks_px: np.ndarray                       # (21, 2) int, for the HUD
+    landmarks_px: np.ndarray                       # (21, 2) int, CLIPPED to frame -- HUD/bbox only
+    landmarks_norm: np.ndarray                     # (21, 2) float, UNCLIPPED normalized coords
+    # landmarks_norm is the cursor's anchor source (Strategy 3.1): MediaPipe
+    # keeps estimating landmarks past the frame edge, and clipping them biases
+    # any anchor toward the frame interior exactly when the hand is close/large
+    # -- the distance-dependence Ted's live test caught. The crop bbox still
+    # uses the clipped values (a crop can't leave the frame).
 
     def is_valid(self) -> bool:
         l, t, r, b = self.box_px
         return r - l >= 8 and b - t >= 8  # reject degenerate slivers
+
+    @property
+    def area_frac(self) -> float:
+        """Landmark-hull area as a fraction of the frame. A proxy for how close
+        the hand is to the camera -- big fraction = hand held up close (the
+        out-of-distribution case for HaGRID's at-a-distance hands). Drives the
+        framing hint in the demo (fix #1)."""
+        return float(self.bbox_norm[2] * self.bbox_norm[3])
 
 
 class HandDetector:
@@ -63,7 +77,13 @@ class HandDetector:
         self,
         model_path: str | Path = DEFAULT_MODEL,
         pad: float = 0.15,
-        min_confidence: float = 0.5,
+        # 3.1.1: defaults lowered 0.5 -> 0.3 after the live test found detection
+        # too strict -- hands missed outright, and fast motion broke tracking
+        # with a slow re-acquire. Lower = stickier lock and eager re-detect, at
+        # the cost of occasional false grabs; raise via flags if that shows up.
+        min_detection_confidence: float = 0.3,
+        min_presence_confidence: float = 0.3,
+        min_tracking_confidence: float = 0.3,
     ):
         model_path = Path(model_path)
         if not model_path.exists():
@@ -80,13 +100,16 @@ class HandDetector:
 
         self._mp = mp
         self.pad = pad
+        # Fix #6 -- the three detection knobs are exposed independently so live
+        # detection robustness can be tuned without touching code: lower to catch
+        # more hands (at the risk of false grabs), raise to be stricter.
         opts = vision.HandLandmarkerOptions(
             base_options=mp_python.BaseOptions(model_asset_path=str(model_path)),
             running_mode=vision.RunningMode.VIDEO,
             num_hands=1,
-            min_hand_detection_confidence=min_confidence,
-            min_hand_presence_confidence=min_confidence,
-            min_tracking_confidence=min_confidence,
+            min_hand_detection_confidence=min_detection_confidence,
+            min_hand_presence_confidence=min_presence_confidence,
+            min_tracking_confidence=min_tracking_confidence,
         )
         self._landmarker = vision.HandLandmarker.create_from_options(opts)
         self._t0 = time.time()
@@ -110,8 +133,9 @@ class HandDetector:
         if not result.hand_landmarks:
             return None
         lms = result.hand_landmarks[0]
-        xs = np.clip([p.x for p in lms], 0.0, 1.0)
-        ys = np.clip([p.y for p in lms], 0.0, 1.0)
+        raw = np.array([[p.x, p.y] for p in lms], dtype=float)  # unclipped (3.1)
+        xs = np.clip(raw[:, 0], 0.0, 1.0)
+        ys = np.clip(raw[:, 1], 0.0, 1.0)
         x0, x1 = float(xs.min()), float(xs.max())
         y0, y1 = float(ys.min()), float(ys.max())
         bbox_norm = (x0, y0, x1 - x0, y1 - y0)
@@ -122,7 +146,7 @@ class HandDetector:
             score = float(result.handedness[0][0].score)
         landmarks_px = np.stack([xs * w, ys * h], axis=1).astype(int)
 
-        hb = HandBox(bbox_norm, box_px, score, landmarks_px)
+        hb = HandBox(bbox_norm, box_px, score, landmarks_px, raw)
         return hb if hb.is_valid() else None
 
     @staticmethod

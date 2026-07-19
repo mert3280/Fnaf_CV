@@ -188,3 +188,92 @@
 - **Created `DOCS/strategies/`** — running history of approaches tried, with results:
   - `README.md` (index + the 1→2 arc), `01-full-frame-single-stage.md` (Strategy 1, 53%, retired/fallback), `02-two-stage-mediapipe-crop.md` (Strategy 2, current — full build, results incl. the 92% annotated vs ~71% MediaPipe-crop gap, the live distance finding, and **6 ranked potential fixes** flagged as Ted's modeling calls: framing guideline, `--pad` tune / retrain-at-pad, perspective/scale aug (AD-09), self-captured fine-tune (AD-04 open Q), progressive unfreeze (AD-08 B), detection-confidence tuning).
 - New: `DOCS/strategies/{README,01-full-frame-single-stage,02-two-stage-mediapipe-crop}.md`
+
+### Also today (4) — bbox model doc, Strategy 2.1, and all 6 fixes implemented in code
+_(Note: DOCS was reorganized into `build/`, `AI/`, `class-related/`, `models/` between sessions; strategies became per-approach folders. Fixed reorg-broken relative links in every doc touched below.)_
+
+**Documented the current (bbox) model** — `DOCS/models/bbox_frozen_mnv3_large/`:
+- **Regenerated the honest report from the checkpoint** (the transient root `DOCS/results.md` was removed in the reorg and never committed): VAL 0.9403 / **TEST 0.9165**, per-class F1 0.82–0.97, confusion matrix → `results.md`. `README.md` = full record (config, method, baseline A/B, weak finger-count pairs, live-gap caveat). Updated `DOCS/models/README.md` index to point at it.
+
+**Strategy 2.1 — hardening of Strategy 2 against the live distance gap:**
+- New `DOCS/build/strategies/2-two-stage-mediapipe-crop/02.1-two-stage-robustness-fixes.md` — explains 2.1 = same pipeline + 6 fixes; documents **each fix + how it's implemented + exact command**, tagged 🟢 live-now / 🟡 needs-retrain / 🔵 needs-data. Updated strategies `README.md` (added 2.1 row + 1→2→2.1 arc) and marked the Strategy-2 page superseded.
+
+**Implemented all 6 fixes in code (defaults preserve current behavior; modeling decisions left to Ted per CLAUDE.md):**
+- **#1 Framing hint (live):** `HandBox.area_frac` + `framing_hint()` warn "hand too close" when it fills too much of the frame. `--near-frac` (0.40). [`detector.py`, `webcam_demo.py`]
+- **#2 Live pad tune (live):** `[` / `]` keys step `detector.pad` live, shown in HUD; `--pad`, `--pad-step`. [`webcam_demo.py`]
+- **#3 Perspective/blur aug (knob, default 0=off):** `AugmentCfg.perspective` + `blur_sigma` → `RandomPerspective`/`GaussianBlur` added to the *train* pipeline only when >0. [`config.py`, `transforms.py`]
+- **#4 Self-capture (tool):** new `src/rt/capture_dataset.py` records detector crops (same pad) into ImageFolder `DATA/selfcapture/<class>/`; keys 1-8/SPACE/c. Fine-tune recipe documented; the run is Ted's.
+- **#5 Progressive unfreeze (mechanism, default 0):** `build_model(..., unfreeze_blocks=N)` + `unfreeze_last_n_blocks()` re-enable the last N of 7 backbone stages; `train.py` reads it and disables the feature-cache when N>0. [`build.py`, `train.py`]
+- **#6 Detection-confidence (live):** detector exposes the 3 MediaPipe thresholds; `--detect/-presence/-tracking-confidence`. [`detector.py`, `webcam_demo.py`]
+- **Verified offline:** unfreeze2 → 51.98% trainable (vs 0.24% frozen); aug knobs add ops only when >0 and default config still 0.0; `area_frac`/`framing_hint` correct; new HUD end-to-end (detector crop→predict→draw) OK on the real checkpoint; all changed modules `py_compile` clean; all doc links resolve. **Not run:** the retrain-dependent fixes (#3, #5) and the self-capture fine-tune (#4) — those await Ted's training decisions.
+- New: `DOCS/models/bbox_frozen_mnv3_large/{README,results}.md`; `DOCS/build/strategies/2-two-stage-mediapipe-crop/02.1-two-stage-robustness-fixes.md`; `src/rt/capture_dataset.py`
+- Changed: `src/rt/{detector,webcam_demo}.py`; `src/data/{config,transforms}.py`; `src/models/build.py`; `src/train.py`; `DOCS/models/README.md`; `DOCS/build/strategies/README.md` + `2-two-stage-mediapipe-crop/02-two-stage-mediapipe-crop.md`; `DOCS/models/baseline_mnv3_large/README.md` (link fixes)
+
+## 2026-07-14
+
+**Focus:** THE SCOPE PIVOT — control changes from an 8-gesture vocabulary to a motion-tracked cursor. Docs-only session (code changes follow next).
+
+### The decision (Ted's, recorded as AD-17…AD-20)
+- **AD-17 — cursor control:** MediaPipe (stage 1, already the cropper) now also drives the **mouse cursor** from the hand's position; the classifier (stage 2) shrinks to **binary palm/fist** — palm = no click, **fist = click**. One point-and-click interaction covers all of FNAF; no gesture→action map, no Office/Camera mode controller (AD-13 retired unbuilt).
+- **AD-18 — data trim:** `classes: [palm, fist]` (~2,179 images, already downloaded — no new acquisition); retrain MobileNetV3 with a fresh 2-class head, same recipe as `bbox_frozen_mnv3_large`.
+- **AD-19 — absolute mapping** (Ted chose over relative/joystick): palm-center anchor → mirror → control box (~60%×55%) → EMA + dead-zone; cursor freezes on no-hand. Relative mapping documented as fallback.
+- **AD-20 — single click per fist** (Ted chose over hold-while-fist): edge-triggered FSM, K-consecutive-frame debounce, re-arm on confirmed palm, cooldown backstop — double-fires structurally impossible.
+
+### Done (all documentation)
+- **Created `DOCS/legacy/`** and `git mv`'d the superseded plan there (history preserved): `proposal.md` + the entire `phases/` tree (8 files). Wrote `legacy/README.md` — why the pivot, what moved, what still carries forward (Phases 1–2 outputs all bank).
+- **New [Strategy 3](../build/strategies/3-cursor-and-click/03-cursor-and-click.md)** — full design spec: pipeline diagram, cursor-mapping chain, click-FSM states, data/retrain workflow, what carries over from 2.1 (everything), open questions (pointing precision, arm's-length palm/fist reliability, fatigue, FPS budget). Strategies `README.md`: added row 3, arc now 1→2→2.1→3, 2.1 marked "folded into 3".
+- **New [plan.md](../build/plan.md)** (replaces legacy phases): 6-step roadmap — trim data → binary retrain → cursor mapper → click FSM → game integration (move+click registration test day 1) → robustness/demo; v2-specific risk table.
+- **`architecture-and-decisions.md`:** Part A rewritten around the cursor pipeline (new diagram, cursor-mapper + click-FSM components, per-frame cursor contract); AD-17…AD-20 added; AD-03 superseded, AD-13 retired, AD-12 simplified-into-FSM note, AD-14 amended (cursor movement; `fnaf_layout.yaml` retired), AD-15 clarified (still static-poses — cursor motion is geometry, not a temporal model); open questions + changelog updated.
+- **Pivot banners/notes:** `data-preparation.md` (8-class tables = pre-pivot era), `models/README.md` (both checkpoints = 8-class era; binary model doc lands on retrain). Updated root `CLAUDE.md` (one-liner, palm/fist facts, defer-list now cursor/FSM tuning, fixed stale pointers) and `DOCS/AI/Claude.md` (gesture→action wording → cursor/click, fixed legacy links).
+
+### Decisions & notes
+- Strategies 1–2.1 stay in place as the measured history (that folder's whole point); only *plan* docs moved to legacy.
+- Learning objective explicitly intact: stage 2 is the same transfer-learning exercise, `num_classes` 8→2.
+- **Next session (code):** `configs/data.yaml` trim + split verify, binary retrain, then `src/rt/cursor.py` + `src/control/click_fsm.py` per plan.md.
+- AI use: Claude drafted this entire doc restructure from Ted's four decisions (legacy scope, click semantics, mapping choice, docs-first) — log in `AI-usage.md` week 3.
+
+### Files changed
+- New: `DOCS/legacy/README.md`; `DOCS/build/strategies/3-cursor-and-click/03-cursor-and-click.md`; `DOCS/build/plan.md`
+- Moved: `DOCS/build/proposal.md` → `DOCS/legacy/`; `DOCS/build/phases/` → `DOCS/legacy/phases/`
+- Changed: `DOCS/build/architecture-and-decisions.md`; `DOCS/build/strategies/README.md`; `DOCS/build/data/data-preparation.md`; `DOCS/models/README.md`; `DOCS/AI/Claude.md`; root `CLAUDE.md`
+
+## 2026-07-15
+
+**Focus:** Built out Strategy 3 end-to-end — data trim, binary retrain, cursor mapper, click FSM, input layer, play loop (plan.md Steps 1–5 code-complete; live/game testing is next and is Ted's).
+
+### Done
+- **Step 1 — data trim (AD-18):** `configs/data.yaml → classes: [palm, fist]`; verified split over 2,179 images: train 1,494 / val 360 / test 325, user-grouped, leak assertions pass.
+- **Step 2 — binary retrain (AD-18):** new `configs/palmfist_frozen.yaml` (identical recipe to `bbox_frozen`, only classes/num_classes change) → `models/palmfist_frozen_mnv3_large/best.pt`. **VAL 0.9639 / TEST 0.9815** (random 0.50); palm F1 0.9812 / fist F1 0.9818; 6 test errors (4 are palm→fist, i.e. phantom-click direction — the FSM debounce is the guard). Ran on CPU via the linear-probe path (~3 min). *For Ted:* val was still climbing at epoch 40 with no overfit signal — more epochs / unfreeze / aug are your levers if the live test wants more. Model documented in `DOCS/models/palmfist_frozen_mnv3_large/`.
+- **Step 3 — cursor mapper (AD-19):** new `src/rt/cursor.py` — palm-center anchor (landmarks 0/5/9/13/17), control box → clamp → EMA → dead-zone → screen px; freezes on no-hand, glides (never teleports) on re-detection. `webcam_demo` now previews the whole thing with **no real input**: control box, virtual-cursor crosshair, click-FSM state + CLICK flash; same flags/defaults as `play` so tuned values transfer.
+- **Step 4 — click FSM (AD-20):** new `src/control/click_fsm.py` — DISARMED/ARMED, K consecutive confident frames, edge-triggered single fire, re-arm on confirmed palm only, cooldown backstop; dropout can never click; legacy 8-class labels safely disarm.
+- **Step 5 — input + play loop (AD-14 amended):** new `src/control/input_sim.py` (`pydirectinput` move+click, DPI-aware, PAUSE=0, `--dry-run`, kill-switch) and `src/control/play.py` (detector → cursor → classifier → FSM → input; global **ESC kill-switch** via `keyboard` hook; HUD). Built, **not yet run against FNAF** — the day-1 movement+click registration test is Ted's next step (dry-run first).
+- **Verified offline:** 27-check suite passed (mapper clamp/freeze/glide/dead-zone/mirror, FSM single-fire/re-arm/dropout/cooldown, checkpoint reload → 2-way softmax); `py_compile` clean on all touched modules; fixed a real bug the smoke test caught (`play.py --help` crashed on cp1252 consoles — Unicode arrows in the docstring).
+- **Docs:** model record `DOCS/models/palmfist_frozen_mnv3_large/{README,results}.md`; models index + strategies README rows updated (strategy 3 → built+trained, 0.9815¹); strategy-3 page status + built-pieces table; plan.md status banner.
+
+### Decisions & notes
+- All tuning values (control box 0.60×0.55, alpha 0.35, dead-zone 0.005, K=3, conf 0.70, cooldown 0.3 s) are **starting-point defaults surfaced as CLI flags** — untouched decisions, Ted tunes live.
+- 0.9815 is on HaGRID's annotated crops; the MediaPipe-crop and arm-extended-distance numbers are unmeasured until the live test.
+- **Next (Ted):** (1) `webcam_demo` with the new checkpoint — eyeball palm/fist + virtual cursor; (2) `play --dry-run`; (3) day-1 in-game registration test (windowed FNAF, admin terminal if needed).
+- AI use: Claude implemented Steps 1–5 (config, training run, all four new modules, demo integration, verification) per AD-17…AD-20's already-locked decisions — log in `AI-usage.md` week 3.
+
+### Files changed
+- New: `configs/palmfist_frozen.yaml`; `src/rt/cursor.py`; `src/control/{click_fsm,input_sim,play}.py`; `models/palmfist_frozen_mnv3_large/` (weights git-ignored); `DOCS/models/palmfist_frozen_mnv3_large/{README,results}.md`
+- Changed: `configs/data.yaml` (classes → palm/fist); `src/rt/webcam_demo.py` (Strategy-3 preview); `DOCS/models/README.md`; `DOCS/build/strategies/README.md`; `DOCS/build/strategies/3-cursor-and-click/03-cursor-and-click.md`; `DOCS/build/plan.md`; `DOCS/results.md` (regenerated by train.py)
+
+### Also today — first live test finding → Strategy 3.1 (distance-invariant cursor)
+- **Live finding (Ted):** the pipeline works but the cursor had **too much of a distance issue** — behavior changed with hand distance. Requirement: calibration must care only about the anchor point's position from the frame's top-left, never hand/box size.
+- **Root cause found (a real bug, not tuning):** the 3.0 anchor was computed from the detector's **frame-clipped** landmarks. A close/large hand has fingers/wrist off-frame; clipping drags those points to the frame edge and **biases the anchor toward the frame interior** — same pointing spot, different cursor position, worse the closer the hand.
+- **Fix (Strategy 3.1):** `HandBox` now carries **unclipped** normalized landmarks (`landmarks_norm`); the anchor (`hand_anchor_norm`, replaces `palm_anchor_norm`) is a pure position from top-left computed from them — size-invariant by construction; off-frame anchors are handled by the control-box clamp instead of clip bias. The classifier crop still uses clipped values (a crop can't leave the frame). New `--anchor palm|box` flag on demo + play (palm plate = stable through the squeeze; box = hull middle, dips slightly on fist) — Ted's live A/B.
+- **Verified:** suite extended to 32 checks — palm/box anchors bit-identical across a 9× hand-size change; unclipped anchor keeps tracking with a third of the hand off-frame (clipped version visibly drags inward); all prior checks still pass. (Also fixed a bad first version of the size-invariance test itself — uncentered template.)
+- **Not fixed by 3.1 (documented):** classifier accuracy at unusual distances (that's the Strategy-2 domain gap — 2.1 levers / self-capture remain the path) and far-distance reach (shrink `--box-w/--box-h` to raise gain — tuning, not a bug).
+- Docs: new `DOCS/build/strategies/3-cursor-and-click/03.1-distance-invariant-cursor.md`; strategies README (3.1 row, arc → 3 → 3.1); strategy-3 page marked hardened-by-3.1; AD-19 amendment + changelog in `architecture-and-decisions.md`.
+- Files — Changed: `src/rt/{detector,cursor,webcam_demo}.py`; `src/control/play.py`. New: the 03.1 strategy doc.
+
+### Also today — second live test → Strategy 3.1.1 (detection, click, distance gain)
+- **Live findings (Ted):** (1) detection touchy — hands missed, fast motion breaks tracking, slow re-acquire; (2) clicks ~50%, and a **slow** palm→fist never clicks; (3) distance error still present after 3.1.
+- **Fix 1 — detection:** MediaPipe confidence defaults lowered **0.5 → 0.3** (all three gates, detector + both CLIs). Stickier lock, eager re-detect; raise `--detect-confidence` if false grabs appear.
+- **Fix 2 — click FSM grace (the slow-fist bug was structural):** 3.0 hard-disarmed on the first ambiguous frame; a slow squeeze's in-between poses are ambiguous, so it disarmed mid-squeeze and the finished fist had nothing to fire from — slow clicks were impossible *by construction*. Now ambiguous frames just don't count; only ambiguity sustained past `--fsm-grace` (default 10 frames) disarms. Firing still needs K confident fists; re-arm still needs K palms; sustained absence still disarms — safety intact. HUD shows a `?n/grace` counter.
+- **Fix 3 — adaptive control box (the real distance invariance):** 3.1 fixed *position*; the residual error was *gain* (same arm motion = huge cursor travel up close, tiny far away). Default `--box-mode adaptive`: box width = `--box-gain` (4.0) × palm span (wrist→middle-knuckle — stable through the squeeze), so the same physical motion moves the cursor the same amount at any distance (verified ±1 px at 4× size difference). Documented trade-off: position- and motion-invariance are mutually exclusive; `--box-mode fixed` reverts to 3.1.
+- **Verified:** suite now **39 checks**, all passing — slow squeeze fires exactly once, one dropout mid-squeeze no longer cancels, sustained absence can't fire, constant gain across distance, fixed mode ignores scale.
+- Docs: new `03.1.1-live-robustness-fixes.md`; strategies README (3.1.1 row + arc); 3.1 page marked patched; AD-19 second amendment + AD-20 amendment + changelog.
+- Files — Changed: `src/rt/{detector,cursor,webcam_demo}.py`; `src/control/{click_fsm,play}.py`. New: the 03.1.1 strategy doc.

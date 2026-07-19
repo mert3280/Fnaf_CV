@@ -44,6 +44,12 @@ class AugmentCfg:
     contrast: float = 0.3
     saturation: float = 0.2
     hue: float = 0.02
+    # Strategy-2.1 fix #3 (default 0.0 = OFF, so existing runs are unchanged).
+    # Target the live webcam-distance gap: perspective warp simulates a hand held
+    # close to the lens; blur simulates a fixed-focus webcam's soft focus. Ted
+    # sets the magnitudes -- this only exposes the knobs (AD-09 is his call).
+    perspective: float = 0.0   # RandomPerspective distortion_scale (0..1)
+    blur_sigma: float = 0.0    # max GaussianBlur sigma (0 = no blur)
 
 
 @dataclass

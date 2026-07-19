@@ -190,8 +190,10 @@ def main():
     data_cfg.loader.batch_size = tcfg["batch_size"]
     data_cfg.loader.num_workers = tcfg["num_workers"]
 
+    unfreeze_blocks = mcfg.get("unfreeze_blocks", 0)  # AD-08 Stage B (default 0 = frozen)
     model = build_model(
-        mcfg["backbone"], mcfg["num_classes"], mcfg["freeze_backbone"], mcfg["pretrained"]
+        mcfg["backbone"], mcfg["num_classes"], mcfg["freeze_backbone"], mcfg["pretrained"],
+        unfreeze_blocks=unfreeze_blocks,
     ).to(device)
     ps = param_summary(model)
     print(f"params: trainable {ps['trainable']:,} / total {ps['total']:,} "
@@ -203,7 +205,14 @@ def main():
     )
     print("split sizes:", {k: len(v.dataset) for k, v in loaders.items()})
 
-    use_cache = tcfg.get("precompute_features") and mcfg["freeze_backbone"] and not tcfg["augment_train"]
+    # Feature caching is only valid when the backbone is fully frozen and
+    # deterministic -- any unfrozen blocks or augmentation force the standard loop.
+    use_cache = (
+        tcfg.get("precompute_features")
+        and mcfg["freeze_backbone"]
+        and unfreeze_blocks == 0
+        and not tcfg["augment_train"]
+    )
     if use_cache:
         print("caching frozen-backbone features (one pass)...")
         feats = {k: cache_features(model, loaders[k], device) for k in ("train", "val", "test")}

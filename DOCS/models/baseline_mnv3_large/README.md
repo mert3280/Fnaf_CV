@@ -6,7 +6,7 @@ the reference point every later model is measured against. It is deliberately th
 *simplest* thing that could work — no augmentation, no unfreezing, whole-frame
 input — so its weaknesses would be diagnostic rather than mysterious. They were:
 this model is the reason the project adopted the two-stage detect-and-crop
-pipeline ([AD-04](../../architecture-and-decisions.md#ad-04--two-stage-pipeline-detect-and-crop-the-hand-then-classify)).
+pipeline ([AD-04](../../build/architecture-and-decisions.md#ad-04--two-stage-pipeline-detect-and-crop-the-hand-then-classify)).
 
 > **Status:** superseded as the live model by the bbox-crop counterpart
 > (`bbox_frozen_mnv3_large`, **91.7% test** vs this model's 53.0%). Kept as the
@@ -19,9 +19,9 @@ pipeline ([AD-04](../../architecture-and-decisions.md#ad-04--two-stage-pipeline-
 
 | Property | Value |
 |---|---|
-| Backbone | `mobilenetv3_large_100` (timm, ImageNet-pretrained) — [AD-07](../../architecture-and-decisions.md#ad-07--mobilenetv3-backbone) |
+| Backbone | `mobilenetv3_large_100` (timm, ImageNet-pretrained) — [AD-07](../../build/architecture-and-decisions.md#ad-07--mobilenetv3-backbone) |
 | Head | fresh 8-class linear classifier (timm `num_classes=8`) |
-| Freeze state | **backbone frozen**, head-only ([AD-08](../../architecture-and-decisions.md#ad-08--frozen-backbone-baseline-then-progressive-unfreezing) Stage A) |
+| Freeze state | **backbone frozen**, head-only ([AD-08](../../build/architecture-and-decisions.md#ad-08--frozen-backbone-baseline-then-progressive-unfreezing) Stage A) |
 | Input | **`full_frame`** (whole image), 224 px, ImageNet norm |
 | Augmentation | none (baseline is un-augmented; AD-09 adds it in Phase 3) |
 | Classes | `like, dislike, fist, one, two_up, palm, ok, mute` (order = `label_idx`) |
@@ -59,7 +59,7 @@ on CPU. (`train.precompute_features: true`.)
 - **Optimizer:** AdamW, lr 1e-3, weight decay 1e-4, 40 epochs, batch 64, seed 42.
 - **Selection:** best-by-val-accuracy checkpoint saved (the full model:
   frozen backbone + trained head).
-- **Split:** the shared 70/15/15 by-user split ([AD-16](../../architecture-and-decisions.md#ad-16--701515-split-grouped-by-user_id-across-all-images)) —
+- **Split:** the shared 70/15/15 by-user split ([AD-16](../../build/architecture-and-decisions.md#ad-16--701515-split-grouped-by-user_id-across-all-images)) —
   train 5919 / val 1273 / test 1402. Identical to every other run, so results
   are directly comparable.
 
@@ -79,7 +79,7 @@ next to this file: **[results.md](results.md)**. Headline:
 **The main story is the *input*, not overfitting.** A frozen ImageNet backbone
 was trained to recognize whole objects/scenes; on a full HaGRID frame the hand
 occupies <5% of the pixels (median 1.8% — Viz-4), so most of the receptive field
-is spent on background. See [data-preparation.md §4](../../data-preparation.md#4-cropping-ad-04)
+is spent on background. See [data-preparation.md §4](../../build/data/data-preparation.md#4-cropping-ad-04)
 for the side-by-side visual.
 
 ### Per-class read (from [results.md](results.md))
@@ -101,12 +101,12 @@ AD-04. The bbox counterpart is now the live model:
 
 - **This model** (`full_frame`, 53.0%) → live via the raw-frame fallback
   (`runtime.use_detector: false`).
-- **`bbox_frozen_mnv3_large`** (`bbox`, 91.7%, [DOCS/results.md](../../results.md))
+- **`bbox_frozen_mnv3_large`** (`bbox`, 91.7%, [bbox results.md](../bbox_frozen_mnv3_large/results.md))
   → live via the **MediaPipe hand cropper** (`src/rt/detector.py`).
 
 Preprocessing contract: a `full_frame` checkpoint must be fed **raw frames** live;
 feeding it MediaPipe crops (or vice-versa) breaks the train/serve match
-([A.3](../../architecture-and-decisions.md#a3-data-flow--contracts)).
+([A.3](../../build/architecture-and-decisions.md#a3-data-flow--contracts)).
 
 ---
 

@@ -13,10 +13,13 @@ sources:
 manifest: DATA/splits/split_manifest.csv   # written split record (audit)
 
 # ---------------------------------------------------------------------------
-# Working class subset (AD-03). Order here defines label_idx (like=0 ... mute=7)
-# and is what the model head is sized to. Do not reorder without retraining.
+# Working classes (AD-18, cursor-control pivot): palm = no click, fist = click.
+# Order here defines label_idx (palm=0, fist=1) and is what the model head is
+# sized to. Do not reorder without retraining. The pre-pivot 8-class subset
+# (AD-03) was: [like, dislike, fist, one, two_up, palm, ok, mute] -- its
+# checkpoints still run from their own saved configs.
 # ---------------------------------------------------------------------------
-classes: [like, dislike, fist, one, two_up, palm, ok, mute]
+classes: [palm, fist]
 
 # ---------------------------------------------------------------------------
 # Split (AD-16). Three-way 70/15/15 over ALL images, drawn BY user_id so no
@@ -52,9 +55,8 @@ normalize:                # ImageNet stats (pretrained backbones); timm may over
 # ---------------------------------------------------------------------------
 # Augmentation (train split only). Policy per AD-09: color/brightness/contrast
 # jitter, small rotation, random-resized-crop, slight translation. Horizontal
-# flip is label-safe for THIS 8-class subset (DOCS/data.md, AD-09) -- revisit
-# if the class list changes. Magnitudes below are starting points to tune in
-# Phase 3, not final values.
+# flip is label-safe for palm/fist (neither has a mirror-image partner class).
+# Magnitudes are starting points, not final values (Ted tunes them).
 # ---------------------------------------------------------------------------
 augment:
   hflip: true

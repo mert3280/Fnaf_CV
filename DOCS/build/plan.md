@@ -1,0 +1,93 @@
+# Plan v2 — Hands-free FNAF via cursor control
+
+> **Status 2026-07-15:** Steps 1–2 **done** (split verified: 1,494/360/325;
+> binary model trained — **0.9815 test**, [record](../models/palmfist_frozen_mnv3_large/README.md)).
+> Steps 3–4 **code-complete and offline-verified** (`src/rt/cursor.py`,
+> `src/control/click_fsm.py`, HUD preview in `webcam_demo`). Step 5 **built,
+> not yet run against the game** (`src/control/play.py` + `input_sim.py`; the
+> in-game registration test and all live tuning are Ted's). Step 6 not started.
+
+**Effective 2026-07-14** (the [AD-17](architecture-and-decisions.md#ad-17--pivot-to-cursor-control-motion-tracked-cursor--binary-click-classifier)
+scope pivot). This replaces the phase plans now archived in
+[../legacy/phases/](../legacy/README.md); the design itself is specified
+in [Strategy 3](strategies/3-cursor-and-click/03-cursor-and-click.md).
+
+## The system in one line
+
+MediaPipe hand tracking **moves the mouse cursor** (absolute mapping); a
+transfer-learned MobileNetV3 classifies the hand crop as **palm (no click) or
+fist (click)**; a debounced FSM fires **one click per palm→fist squeeze** into
+the real game via `pydirectinput`.
+
+## What's already banked (carries forward unchanged)
+
+- **Data pipeline** (`src/data/`): index → user-grouped 70/15/15 split →
+  bbox-crop → backbone-driven transforms. Class list is one config line.
+- **Images on disk**: `palm` (1,082) and `fist` (1,097) are already downloaded —
+  the pivot needs **no new acquisition**.
+- **Training stack** (`src/train.py`, `src/models/build.py`): config-driven,
+  checkpoint self-describing, unfreeze knob ready (AD-08).
+- **Two-stage runtime** (`src/rt/`): MediaPipe detector, shared crop contract,
+  webcam demo with the six Strategy-2.1 robustness fixes, self-capture tool.
+- **Evidence base**: strategies 1 → 2 → 2.1 measured and documented; the 8-class
+  checkpoints still run for comparison.
+
+## The workflow (remaining build, in order)
+
+### Step 1 — Trim the data to `palm` + `fist` (AD-18)
+- `configs/data.yaml → classes: [palm, fist]`; rerun `python -m src.data.dataset`
+  to verify the recomputed split (~2,179 images, user-grouped, no leakage).
+- Regenerate the split manifest next to the future checkpoint.
+
+### Step 2 — Retrain MobileNetV3 as the binary click classifier (AD-18)
+- Same recipe as `bbox_frozen_mnv3_large`: pretrained backbone, fresh 2-class
+  head, `crop_mode: bbox`, frozen first (AD-08 Stage A).
+- **Ted's calls, in the loop:** whether/when to unfreeze (Stage B), whether to
+  enable the 2.1 perspective/blur augmentation, what test number is "good
+  enough to play." Evaluate on val, report test **once** (AD-10).
+- Likely follow-up: **self-capture fine-tune at cursor distances**
+  (`src/rt/capture_dataset.py`) — arm-extended hands are exactly the regime
+  HaGRID lacks and cursor driving lives in.
+- Document the run under `DOCS/models/` like the previous two.
+
+### Step 3 — Stage 1 becomes the cursor (AD-19)
+- New `src/rt/cursor.py`: palm-center anchor (landmarks 0/5/9/13/17) → mirror →
+  control box (~60%×55%, config) → EMA (`alpha ≈ 0.35`) + dead-zone → screen
+  coords; freeze on no-hand, re-seed on re-detection.
+- Prove it in the webcam demo HUD first (draw the target point), **before**
+  wiring real cursor movement.
+
+### Step 4 — Stage 2 becomes the click (AD-20)
+- New `src/control/click_fsm.py`: ARMED → K confident fist frames → one click →
+  re-arm on K confident palm frames; DISARM on dropout; ~0.3 s cooldown.
+- HUD shows FSM state; **K, thresholds, cooldown are Ted's live-tuning calls.**
+
+### Step 5 — Drive the real game (AD-14, amended)
+- `pydirectinput` **movement + click** registration test in FNAF on day 1 of
+  this step — movement smoothness is a new unknown on top of the old click
+  check. Global **kill-switch** before anything else runs.
+- Then: live Night-1 attempts, tune control box / smoothing / K against real
+  buttons, log failures honestly.
+
+### Step 6 — Robustness & demo
+- Lighting/background/fatigue passes, calibration notes, recorded hands-free
+  Night 1, final results write-up, retrospective + AI-usage log wrap-up.
+
+## Success criteria (unchanged in spirit from the proposal)
+
+1. **Headline demo:** complete FNAF Night 1 entirely hands-free, on video.
+2. **Honest numbers:** binary test accuracy reported once, *plus* the live
+   metrics that actually matter now — click transition reliability and cursor
+   pointing precision at play distance.
+3. **Learning objective intact:** the transfer-learning story (freeze →
+   unfreeze decisions, curve reading, train/serve gap management) is fully
+   exercised by the retrain in Step 2 — same mechanics, simpler label space.
+
+## Risks specific to v2
+
+| Risk | Mitigation path |
+|---|---|
+| Cursor can't hit small FNAF controls | Tune control box / smoothing → One-Euro filter → relative-mapping fallback (AD-19) |
+| palm↔fist unreliable at arm's length | 2.1 aug levers → self-capture fine-tune at cursor distances |
+| Arm fatigue during a full night | Control-box sizing (small hand motion = full screen travel); rest via no-hand freeze |
+| `pydirectinput` movement not smooth in FNAF | Test day 1 of Step 5; fallback to raw SendInput move calls if needed |
