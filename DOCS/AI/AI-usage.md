@@ -61,4 +61,24 @@ Template for each entry:
 
 ---
 
-<!-- Append Week 3..5 entries below as the project progresses. -->
+## Week 3 — Experiment Tracking, Evaluation & Reporting (2026-07-19)
+
+### Tasks AI assisted with
+- **MLflow consolidation (glue code):** Claude Code wrote `scripts/mlflow_log_runs.py` and `scripts/mlflow_export_comparison.py` to log the three *already-run* experiments (`baseline` / `bbox_frozen` / `palmfist_frozen`) into an MLflow store and export a run-comparison CSV + accuracy chart. Params were read from each `config.snapshot.json`; **metrics were transcribed verbatim from the committed `DOCS/models/<run>/results.md`** — no numbers were re-estimated or invented.
+- **Report drafting:** assembled `class-related/week3/ml-experimentation-report.md` (rubric sections 1–4) from existing decision records (AD-04 crop, AD-16 split, AD-18 pivot) and the real recorded metrics.
+- **Doc updates:** Week-3 update to `build/plan.md`; this entry + the Claude.md tool/cadence note; daily-update entry.
+
+### Prompts / context that worked well
+- Giving Claude the **assignment rubric file in-repo** (`class-related/week3/W3A1.md`) plus the existing `DOCS/models/` results let it map every deliverable onto artifacts that already existed instead of proposing new training runs.
+- Asking it to **surface the MLflow gap as a decision** (retrofit vs. re-run vs. report-only) rather than silently choosing — I picked retroactive logging of the real runs.
+
+### AI output that needed correction / guidance
+- Claude first treated the project's own markdown-report tracking as sufficient for the "logged in MLflow" deliverable; I directed it to **actually adopt MLflow** (log + export) so the deliverable is met literally, with an explicit honesty note that MLflow was adopted this week to consolidate earlier runs.
+- I own the **model-selection justification and the train/serve honesty caveat** — Claude drafted the wording, but the call (`palmfist_frozen` into Week-4 tuning, and *why* the 0.9815 is not the live number) is mine, carried forward from the existing decision records.
+
+### Net assessment
+- As planned. AI drove tracking glue code and report scaffolding from real recorded numbers; I retained every modeling and evaluation call (crop A/B reading, class-trim rationale, candidate selection, the honest train/serve gap). MLflow entered the toolchain this week (logged in Claude.md). No core ML learning objective was delegated.
+
+---
+
+<!-- Append Week 4..5 entries below as the project progresses. -->

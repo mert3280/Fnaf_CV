@@ -12,6 +12,29 @@ scope pivot). This replaces the phase plans now archived in
 [../legacy/phases/](../legacy/README.md); the design itself is specified
 in [Strategy 3](strategies/3-cursor-and-click/03-cursor-and-click.md).
 
+## Week-3 update (2026-07-19) — on track; tracking consolidated, tuning next
+
+**On track — no roadmap change.** Steps 1–2 (data trim + binary retrain) and the
+offline halves of Steps 3–4 are done; Step 5 (drive the real game) remains the next
+build milestone and is unchanged. This week was **experiment consolidation and
+reporting**, not new modeling:
+
+- Adopted **MLflow** as the experiment store: the three already-run experiments
+  (`baseline` / `bbox_frozen` / `palmfist_frozen`) are now logged and comparable via
+  [`scripts/mlflow_log_runs.py`](../../scripts/mlflow_log_runs.py) +
+  [`scripts/mlflow_export_comparison.py`](../../scripts/mlflow_export_comparison.py)
+  (store `./mlruns`, git-ignored; exported comparison committed under
+  [`class-related/week3/`](../class-related/week3/ml-experimentation-report.md)).
+- Wrote the Week-3 [ML experimentation report](../class-related/week3/ml-experimentation-report.md)
+  (feature engineering, experiment design, 3-run results, model selection).
+
+**Confirmed candidate for Week-4 tuning:** `palmfist_frozen_mnv3_large`. Tuning
+work is already scoped inside **Step 2 / Step 5** below and does not change them —
+Week 4 executes those levers (AD-08 Stage-B unfreeze, AD-09 augmentation, and a
+self-capture fine-tune at cursor distances) explicitly to close the **train/serve
+gap** (0.9815 on HaGRID crops vs the lower, still-unmeasured live/arm's-length
+number). No new steps needed; the plan already anticipated this.
+
 ## The system in one line
 
 MediaPipe hand tracking **moves the mouse cursor** (absolute mapping); a
