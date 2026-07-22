@@ -371,3 +371,13 @@ _(Note: DOCS was reorganized into `build/`, `AI/`, `class-related/`, `models/` b
 - **Verified:** `node --check app.js` passes. Logic exercised by reading through the filter/sort/render path; **not yet eyeballed live** — Ted's browser check on the Overview tab.
 - **AI use:** Claude implemented the filter/sort UI and client-side logic at Ted's request. Log in `AI-usage.md`.
 - Changed: `src/eval_dashboard/static/{index.html,app.js,style.css}`
+
+## 2026-07-22
+
+### Git housekeeping — split the accumulated working-tree changes into topic branches
+- **Goal (Ted's ask):** the 2026-07-20/21 work (Strategy 3.2, Strategy 3.2.1, the eval dashboard) had all landed as one large uncommitted working-tree diff on `main`. Split it into the three real bodies of work, each on its own branch, then merge each into `main` — instead of one undifferentiated commit.
+- **Grouping:** `strategy-3.2-fist-vs-rest` (AD-21: `label_groups`/`balance` in the data layer, the fist-vs-rest configs/model docs, `eval_openset.py`, the play.py/webcam_demo.py/click_fsm.py binary-click-model generalization); `strategy-3.2.1-snappier-fsm` (AD-20 amendment: `src/control/strategies.py` presets, `play.py --strategy`); `eval-dashboard` (`src/eval_dashboard/`, `eval_results/`, the controller-and-calibration doc, `code-map.md`, the `flask`/`python-docx` requirements). Merge order `A → B → C` — verified `src/eval_dashboard/server.py` imports `src.control.strategies`, so the dashboard branch genuinely depends on the FSM-presets branch merging first.
+- **Shared docs** (`architecture-and-decisions.md`, `strategies/README.md`, `daily-update.md`) had hunks belonging to more than one branch (e.g. AD-20's amendment vs. AD-21 in the same file). Split each by hand along its existing section/paragraph boundaries so every branch's diff against `main` was exactly its own slice — verified each intermediate slice against the final working-tree content before committing.
+- **Verified:** every intermediate `play.py` cut parsed (`ast.parse`); each branch's diff against `main` matched its intended slice exactly; final `main` after all three merges is byte-identical to the original pre-split working tree (`git status` clean, no residual diff).
+- **AI use:** Claude did the branch/commit split and merges end-to-end at Ted's request. Log in `AI-usage.md`.
+- Branches created and merged into `main`: `strategy-3.2-fist-vs-rest`, `strategy-3.2.1-snappier-fsm`, `eval-dashboard`.
