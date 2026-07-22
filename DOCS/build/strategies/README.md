@@ -26,6 +26,7 @@ worked, how well, and where did each break?*
 | 3.1 | [Distance-invariant cursor](3-cursor-and-click/03.1-distance-invariant-cursor.md) | same + **size-invariant anchor calibration** (unclipped landmarks) | — ⁴ | position fixed; gain + clicks still bad live | folded into 3.1.1 |
 | 3.1.1 | [Live robustness fixes](3-cursor-and-click/03.1.1-live-robustness-fixes.md) | same + **adaptive box (constant gain)**, **click grace window**, looser detection | — ⁴ | fixes slow-click + distance gain; re-test pending | folded into 3.2 |
 | 3.2 | [Fist vs. not-fist](3-cursor-and-click/03.2-fist-vs-rest.md) | same pipeline, classifier retrained so **negative class = `not_fist`** (6 diverse gestures) → unknown poses read as no-click | 0.9358 ⁵ | slashes false clicks (pointing hand 76%→9%; unseen `ok` 6.8%→0.8%); live re-test pending | **current** |
+| 3.2.1 | [Snappier click FSM](3-cursor-and-click/03.2.1-snappier-fsm.md) | **same 3.2 model**, click FSM retuned: conf 0.70→**0.80**, K 3→**2** (stricter gate, faster confirm) | — ⁶ | snappier clicks; false-click cost meant to wash (0.80 gate offsets K=2); live A/B pending | tuning variant |
 
 ¹ 0.917 is on HaGRID's *own* annotated crops. Fed the **live MediaPipe** crop it
 is ~0.71 on detected HaGRID stills — the train/serve gap is documented in the
@@ -47,8 +48,14 @@ number; its verdict is the live pointing feel across distances.
 gesture 6.8% → **0.8%**. Cost: `fist` click-rate 99.2% → 96.0%. Full A/B in the
 [model record](../../models/fistvsrest_frozen_mnv3_large/README.md). Live
 re-test at arm's length still pending.
+⁶ 3.2.1 is a *tuning* variant, not a retrain — the 3.2 checkpoint runs unchanged;
+only two FSM knobs move (`--fsm-conf` 0.70→0.80, `--fsm-k` 3→2). The two shifts
+pull opposite ways on false clicks by design (a stricter per-frame gate offsets a
+looser confirm), so there's no new offline headline — the decision is the live
+3.2-vs-3.2.1 feel. Defined in [`src/control/strategies.py`](../../../src/control/strategies.py);
+selectable via `play.py --strategy 3.2.1` and the dashboard's Click-strategy picker.
 
-## The arc (1 → 2 → 2.1 → 3 → 3.1 → 3.1.1 → 3.2)
+## The arc (1 → 2 → 2.1 → 3 → 3.1 → 3.1.1 → 3.2 → 3.2.1)
 
 **1 → 2.** Strategy 1 classified the **whole webcam frame** and hit 53% test —
 not a model failure but an *input* one: a HaGRID hand is <5% of the frame, so a
@@ -99,3 +106,14 @@ on six diverse non-fist gestures — making "unknown → no-click" a learned def
 rather than an FSM band-aid. `fist` stays the one crisp positive. `ok` is held
 out unseen to measure the real metric: does an untrained pose read as `not_fist`?
 The palm/fist model stays runnable for the A/B.
+
+**3.2 → 3.2.1.** With the *model* handling false clicks, the remaining question is
+**feel**: 3.2's FSM (conf 0.70, K 3) is deliberately steady, and a live tester
+wanted clicks to fire faster. 3.2.1 keeps the 3.2 checkpoint untouched and moves
+only the two FSM knobs — tighten the per-frame gate to **0.80** while dropping the
+confirm to **K = 2**. The stricter gate is there to buy back the false-click
+safety the looser confirm gives up (a wash by construction), so the net is a
+snappier click without leaning harder on the FSM to reject unknown poses — that's
+still the model's job (AD-21). It's a runtime preset, not a retrain: pick it with
+`play.py --strategy 3.2.1` or the dashboard's Click-strategy picker; the live
+3.2-vs-3.2.1 A/B decides whether it stays.
