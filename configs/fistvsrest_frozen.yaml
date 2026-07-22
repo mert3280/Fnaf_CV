@@ -1,0 +1,32 @@
+# Strategy 3.2 (AD-21): "fist vs. not-fist" binary classifier.
+# not_fist = no click (palm + 5 other gestures), fist = click.
+#
+# SAME recipe as configs/palmfist_frozen.yaml -- backbone, seed, epochs, freeze
+# policy, crop_mode: bbox -- so the only differences from the palm/fist run are
+# the class definition (data_fistvsrest.yaml) and what the negative class means.
+# That keeps the two directly comparable for the A/B.
+#
+# Stage A (AD-08): backbone FROZEN, head-only linear probe on cached features.
+# Whether/when to unfreeze (unfreeze_blocks > 0) or turn on the 2.1 aug knobs is
+# Ted's modeling call after these numbers.
+
+data_config: configs/data_fistvsrest.yaml   # classes + label_groups live here
+
+model:
+  backbone: mobilenetv3_large_100   # same backbone (AD-07)
+  num_classes: 2
+  freeze_backbone: true             # Stage A: head-only
+  pretrained: true
+
+train:
+  epochs: 40
+  lr: 0.001
+  weight_decay: 0.0001
+  optimizer: adamw
+  batch_size: 64
+  num_workers: 0   # CPU box: in-process decode beats multiproc IPC here
+  seed: 42
+  augment_train: false
+  precompute_features: true         # frozen + no aug => cache features, linear-probe
+
+out_dir: models/fistvsrest_frozen_mnv3_large

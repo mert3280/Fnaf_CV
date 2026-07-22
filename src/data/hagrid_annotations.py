@@ -23,7 +23,10 @@ from pathlib import Path
 import pandas as pd
 
 # Columns produced by build_index(). Documented so downstream code is stable.
-INDEX_COLUMNS = ["uuid", "label", "label_idx", "path", "bbox", "user_id", "has_ann"]
+# `label` is the TARGET class (what the head predicts); `source_label` is the
+# gesture folder the image came from -- they differ only when label_groups
+# collapses several folders into one class (Strategy 3.2 / AD-21).
+INDEX_COLUMNS = ["uuid", "label", "label_idx", "path", "bbox", "user_id", "has_ann", "source_label"]
 
 
 def load_class_annotations(ann_dir: str | Path, cls: str) -> dict[str, dict]:
@@ -81,6 +84,7 @@ def build_index(
     classes: list[str],
     class_to_idx: dict[str, int] | None = None,
     require_annotation: bool = False,
+    source_to_label: dict[str, str] | None = None,
 ) -> pd.DataFrame:
     """Scan on-disk images and join their HaGRID annotations into one index.
 
@@ -89,28 +93,35 @@ def build_index(
     -- see DOCS/data.md), then attach each file's bbox/landmarks by UUID.
 
     Args:
-        images_dir: dir laid out as <images_dir>/<class>/<uuid>.jpg.
-        ann_dir:    dir of <class>.json HaGRID annotations.
-        classes:    the working subset to include.
-        class_to_idx: label -> int; defaults to enumerate(classes).
+        images_dir: dir laid out as <images_dir>/<folder>/<uuid>.jpg.
+        ann_dir:    dir of <folder>.json HaGRID annotations.
+        classes:    the TARGET labels (used only for the class_to_idx fallback).
+        class_to_idx: TARGET label -> int; defaults to enumerate(classes).
         require_annotation: if True, drop images with no matching record
             (else keep them with bbox=None; full_frame training still works).
+        source_to_label: image folder -> TARGET label. Defaults to the identity
+            map over `classes` (folder name == label). Pass a many-to-one map to
+            collapse several gesture folders into one class (Strategy 3.2): the
+            bbox is still looked up by the *folder's own* gesture (we crop the
+            hand that folder is about), only `label`/`label_idx` are the target.
 
     Returns a DataFrame with columns INDEX_COLUMNS, one row per image.
     """
     images_dir = Path(images_dir)
     class_to_idx = class_to_idx or {c: i for i, c in enumerate(classes)}
+    source_to_label = source_to_label or {c: c for c in classes}
 
     rows: list[dict] = []
-    for cls in classes:
-        cls_dir = images_dir / cls
+    for src in source_to_label:  # `src` is the image folder / annotated gesture
+        label = source_to_label[src]  # the class the head is trained to predict
+        cls_dir = images_dir / src
         if not cls_dir.is_dir():
             raise FileNotFoundError(f"Missing image folder: {cls_dir}")
-        raw = load_class_annotations(ann_dir, cls)
+        raw = load_class_annotations(ann_dir, src)
         for img_path in sorted(cls_dir.glob("*.jpg")):
             uuid = img_path.stem
             record = raw.get(uuid)
-            bbox = bbox_for_label(record, cls) if record else None
+            bbox = bbox_for_label(record, src) if record else None
             if record is None and require_annotation:
                 continue
             # user_id groups images by subject so a person can't leak across
@@ -119,12 +130,13 @@ def build_index(
             rows.append(
                 {
                     "uuid": uuid,
-                    "label": cls,
-                    "label_idx": class_to_idx[cls],
+                    "label": label,
+                    "label_idx": class_to_idx[label],
                     "path": str(img_path),
                     "bbox": bbox,
                     "user_id": user_id or f"u_{uuid}",
                     "has_ann": record is not None,
+                    "source_label": src,
                 }
             )
 

@@ -24,7 +24,8 @@ worked, how well, and where did each break?*
 | 2.1 | [Two-stage, hardened](2-two-stage-mediapipe-crop/02.1-two-stage-robustness-fixes.md) | same pipeline **+ 6 robustness fixes** | — ² | closes the live distance gap | folded into 3 |
 | 3 | [Cursor + click](3-cursor-and-click/03-cursor-and-click.md) | MediaPipe **tracks hand → moves cursor**; crop → **binary palm/fist** → click | **0.9815** ³ | works; cursor was distance-sensitive | folded into 3.1 |
 | 3.1 | [Distance-invariant cursor](3-cursor-and-click/03.1-distance-invariant-cursor.md) | same + **size-invariant anchor calibration** (unclipped landmarks) | — ⁴ | position fixed; gain + clicks still bad live | folded into 3.1.1 |
-| 3.1.1 | [Live robustness fixes](3-cursor-and-click/03.1.1-live-robustness-fixes.md) | same + **adaptive box (constant gain)**, **click grace window**, looser detection | — ⁴ | fixes slow-click + distance gain; re-test pending | **current** |
+| 3.1.1 | [Live robustness fixes](3-cursor-and-click/03.1.1-live-robustness-fixes.md) | same + **adaptive box (constant gain)**, **click grace window**, looser detection | — ⁴ | fixes slow-click + distance gain; re-test pending | folded into 3.2 |
+| 3.2 | [Fist vs. not-fist](3-cursor-and-click/03.2-fist-vs-rest.md) | same pipeline, classifier retrained so **negative class = `not_fist`** (6 diverse gestures) → unknown poses read as no-click | 0.9358 ⁵ | slashes false clicks (pointing hand 76%→9%; unseen `ok` 6.8%→0.8%); live re-test pending | **current** |
 
 ¹ 0.917 is on HaGRID's *own* annotated crops. Fed the **live MediaPipe** crop it
 is ~0.71 on detected HaGRID stills — the train/serve gap is documented in the
@@ -38,8 +39,16 @@ crops, like the others — the live MediaPipe-crop number is pending the live te
 Full report: [palmfist_frozen_mnv3_large](../../models/palmfist_frozen_mnv3_large/README.md).
 ⁴ 3.1 changes the cursor *calibration*, not the model — same checkpoint, same
 number; its verdict is the live pointing feel across distances.
+⁵ 3.2 is a *retrain*, not a pipeline change. Balanced binary ⇒ raw accuracy
+(0.9358) is the wrong headline (random = 50%, and it's lower than palm/fist's
+0.9815 *by design* — a harder negative). The metric that counts is the
+**open-set false-click rate**: on non-fist poses the palm/fist model false-clicks
+41–81% of the time (a *pointing* hand 76%), fist-vs-rest 0–9%; on the unseen `ok`
+gesture 6.8% → **0.8%**. Cost: `fist` click-rate 99.2% → 96.0%. Full A/B in the
+[model record](../../models/fistvsrest_frozen_mnv3_large/README.md). Live
+re-test at arm's length still pending.
 
-## The arc (1 → 2 → 2.1 → 3 → 3.1)
+## The arc (1 → 2 → 2.1 → 3 → 3.1 → 3.1.1 → 3.2)
 
 **1 → 2.** Strategy 1 classified the **whole webcam frame** and hit 53% test —
 not a model failure but an *input* one: a HaGRID hand is <5% of the frame, so a
@@ -80,3 +89,13 @@ but **gain** still scaled with distance). 3.1.1 lowers detection defaults to
 safety properties preserved), and makes the control box **scale with hand
 size** so the same arm motion moves the cursor the same amount at any
 distance (`--box-mode fixed` reverts).
+
+**3.1.1 → 3.2 (AD-21).** With the cursor solid, attention moved to the *other*
+click failure: the 2-class palm/fist model must map **every** hand shape onto
+palm or fist, so an unrecognised pose (point, "ok", a slow squeeze's mid-frames)
+can read as `fist` and fire an **accidental click**. 3.2 keeps the whole
+pipeline but **retrains the classifier** so class 0 becomes `not_fist` — trained
+on six diverse non-fist gestures — making "unknown → no-click" a learned default
+rather than an FSM band-aid. `fist` stays the one crisp positive. `ok` is held
+out unseen to measure the real metric: does an untrained pose read as `not_fist`?
+The palm/fist model stays runnable for the A/B.
