@@ -128,8 +128,16 @@ def main() -> None:
 
     lm = load_checkpoint(args.checkpoint, device=args.device)
     print("loaded", lm.describe())
-    if not {"palm", "fist"} <= set(lm.classes):
-        raise SystemExit(f"checkpoint classes {lm.classes} lack palm/fist -- wrong model.")
+    # Binary click model: one "fist" (click) class + one no-click class. That
+    # covers both palm/fist (AD-18) and not_fist/fist (Strategy 3.2 / AD-21);
+    # the no-click label is whichever of the two isn't "fist".
+    if "fist" not in lm.classes or lm.num_classes != 2:
+        raise SystemExit(
+            f"checkpoint classes {lm.classes} are not a binary click model "
+            "(need exactly 2 classes incl. 'fist') -- wrong model."
+        )
+    noclick_label = next(c for c in lm.classes if c != "fist")
+    print(f"click model: no-click='{noclick_label}'  click='fist'")
     if lm.crop_mode != "bbox":
         print("[warn] full_frame checkpoint: classifier gets the whole frame; the "
               "detector still runs for the cursor.")
@@ -153,7 +161,8 @@ def main() -> None:
         mirror_x=args.no_mirror,  # un-mirrored frame -> mapper does the mirror
     )
     fsm = ClickFSM(k=args.fsm_k, conf_threshold=args.fsm_conf,
-                   cooldown_s=args.cooldown, grace=args.fsm_grace)
+                   cooldown_s=args.cooldown, grace=args.fsm_grace,
+                   palm_label=noclick_label, fist_label="fist")
     sim = InputSim(dry_run=args.dry_run)
     hook_kill_switch(sim)
 

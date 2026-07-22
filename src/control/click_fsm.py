@@ -30,8 +30,12 @@ Why this shape (AD-20 rationale):
 * **Cooldown** (~0.3 s) is a pure backstop against classifier flicker mid-
   transition; the palm re-arm is the real guard.
 
-Works with any checkpoint whose class list contains "palm" and "fist" -- other
-labels (from the legacy 8-class models) simply count as "neither" and disarm.
+Works with any binary no-click / click checkpoint: pass the no-click class as
+`palm_label` and the click class as `fist_label`. For the palm/fist model
+(AD-18) that is "palm"/"fist"; for the fist-vs-rest model (Strategy 3.2 / AD-21)
+it is "not_fist"/"fist" -- the callers read both out of the checkpoint's class
+list. Any other label (e.g. from the legacy 8-class models) counts as "neither"
+and disarms.
 
 K, the confidence threshold, and the cooldown are Ted's live-tuning calls
 (CLAUDE.md); defaults here are the Strategy-3 starting points, surfaced as CLI

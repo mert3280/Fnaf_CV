@@ -86,13 +86,52 @@ def build_full_index(cfg: DataConfig) -> pd.DataFrame:
     these by user_id (see splits.py). UUIDs are unique across sources (byte- and
     id-disjoint by construction, see DOCS/data.md), but we drop any accidental
     duplicate defensively so a UUID can never appear twice.
+
+    With `cfg.label_groups`, several gesture folders collapse into one target
+    label; with `cfg.balance`, the majority label is then downsampled to the
+    minority count (drawn evenly across its source gestures, seeded) -- AD-21.
     """
+    s2l = cfg.source_to_label
     frames = [
-        build_index(images, ann, cfg.classes, cfg.class_to_idx)
+        build_index(images, ann, cfg.classes, cfg.class_to_idx, source_to_label=s2l)
         for images, ann in cfg.sources
     ]
     full = pd.concat(frames, ignore_index=True)
-    return full.drop_duplicates(subset="uuid").reset_index(drop=True)
+    full = full.drop_duplicates(subset="uuid").reset_index(drop=True)
+    if cfg.balance:
+        full = _balance_labels(full, cfg.split.seed)
+    return full
+
+
+def _balance_labels(df: pd.DataFrame, seed: int) -> pd.DataFrame:
+    """Downsample every label to the smallest label's count.
+
+    For a grouped label (several `source_label`s) the draw is spread as evenly as
+    possible across its sources so the negative class stays diverse rather than
+    over-representing one gesture; any shortfall from uneven source sizes is
+    topped up from the remaining rows. Fully seeded => identical every run.
+    """
+    target = int(df["label"].value_counts().min())
+    kept: list[pd.DataFrame] = []
+    for _, grp in df.groupby("label", sort=False):
+        if len(grp) <= target:
+            kept.append(grp)
+            continue
+        srcs = list(grp["source_label"].unique())
+        per = target // len(srcs)
+        picks = [
+            sub.sample(n=min(per, len(sub)), random_state=seed)
+            for s in srcs
+            for sub in [grp[grp["source_label"] == s]]
+        ]
+        drawn = pd.concat(picks) if picks else grp.iloc[:0]
+        if len(drawn) < target:  # top up the remainder to hit `target` exactly
+            remainder = grp.drop(drawn.index)
+            drawn = pd.concat(
+                [drawn, remainder.sample(n=target - len(drawn), random_state=seed)]
+            )
+        kept.append(drawn)
+    return pd.concat(kept).sample(frac=1, random_state=seed).reset_index(drop=True)
 
 
 def _split(cfg: DataConfig) -> Splits:

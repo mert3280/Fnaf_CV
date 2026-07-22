@@ -64,7 +64,17 @@ class LoaderCfg:
 class DataConfig:
     sources: list[tuple[Path, Path]]  # (images_dir, ann_dir) pairs to index
     manifest: Path
-    classes: list[str]
+    classes: list[str]                # TARGET labels -> head size + label_idx
+    # Optional label grouping (Strategy 3.2 / AD-21): map each target label to the
+    # image folders that feed it, so many gesture folders can collapse into one
+    # class -- e.g. `not_fist: [palm, one, two_up, ...]`. When None, every target
+    # label is its own folder (folder name == label; the palm/fist scheme).
+    label_groups: dict[str, list[str]] | None = None
+    # Downsample the majority label(s) to the minority label's count, drawn evenly
+    # across each label's source folders (seeded). Balances a grouped negative
+    # class (6 folders) against a single-folder positive (`fist`) without an
+    # extra loss weight -- see AD-21.
+    balance: bool = False
     split: SplitCfg = field(default_factory=SplitCfg)
     input: InputCfg = field(default_factory=InputCfg)
     normalize_mean: tuple[float, float, float] = (0.485, 0.456, 0.406)
@@ -80,6 +90,33 @@ class DataConfig:
     def num_classes(self) -> int:
         return len(self.classes)
 
+    @property
+    def source_classes(self) -> list[str]:
+        """Flat, order-stable list of image folders to index. Without
+        `label_groups` this is just `classes`; with it, every source folder
+        across all groups (deduped)."""
+        if not self.label_groups:
+            return list(self.classes)
+        seen: set[str] = set()
+        out: list[str] = []
+        for label in self.classes:
+            for src in self.label_groups.get(label, [label]):
+                if src not in seen:
+                    seen.add(src)
+                    out.append(src)
+        return out
+
+    @property
+    def source_to_label(self) -> dict[str, str]:
+        """Image folder gesture -> TARGET label. Identity map when ungrouped."""
+        if not self.label_groups:
+            return {c: c for c in self.classes}
+        return {
+            src: label
+            for label in self.classes
+            for src in self.label_groups.get(label, [label])
+        }
+
     @classmethod
     def from_yaml(cls, path: str | Path = "configs/data.yaml") -> "DataConfig":
         raw = yaml.safe_load(Path(path).read_text())
@@ -89,6 +126,8 @@ class DataConfig:
             sources=sources,
             manifest=Path(raw["manifest"]),
             classes=list(raw["classes"]),
+            label_groups=raw.get("label_groups"),
+            balance=bool(raw.get("balance", False)),
             split=SplitCfg(**raw.get("split", {})),
             input=InputCfg(**raw.get("input", {})),
             normalize_mean=tuple(norm.get("mean", (0.485, 0.456, 0.406))),

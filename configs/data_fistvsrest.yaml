@@ -1,0 +1,73 @@
+# Data config for Strategy 3.2 (AD-21): "fist vs. not-fist".
+#
+# Same pipeline as configs/data.yaml -- same sources, split, crop geometry,
+# normalization -- but the classifier is reframed so that the negative class is
+# "anything that is not a fist", trained on a DIVERSE set of non-fist gestures.
+# Live, this means an unrecognised pose decays to NO-CLICK by construction,
+# instead of being forced onto palm/fist and risking an accidental click.
+#
+# Kept separate from data.yaml on purpose: the palm/fist run (AD-18) stays
+# reproducible for the A/B, and each checkpoint records the classes it was
+# trained on.
+
+sources:
+  - {images: DATA/images/train_val, ann: DATA/ann_train_val}
+  - {images: DATA/images/subsample, ann: DATA/ann_subsample}
+manifest: DATA/splits/split_manifest_fistvsrest.csv
+
+# ---------------------------------------------------------------------------
+# Target classes (label_idx): not_fist = 0 (no click), fist = 1 (click).
+# `label_groups` maps each class to the image folders that feed it. `fist` is a
+# single folder; `not_fist` aggregates six distinct non-fist gestures so the
+# negative class generalises to "not a fist" rather than memorising one pose.
+#
+# `ok` is deliberately EXCLUDED from training -- it is held out as an unseen
+# gesture for the open-set check (does an untrained pose read as not_fist?),
+# the honest test that this reframe actually prevents accidental clicks.
+# ---------------------------------------------------------------------------
+classes: [not_fist, fist]
+label_groups:
+  fist:     [fist]
+  not_fist: [palm, one, two_up, like, dislike, mute]
+
+# Downsample not_fist (~6.4k across 6 folders) to the fist count (~1.1k), drawn
+# evenly across the six negatives and seeded -- a balanced 2-class problem with
+# no loss weighting. summary() reports the realised per-class counts.
+balance: true
+
+# ---------------------------------------------------------------------------
+# Everything below is identical to configs/data.yaml (AD-16 split, AD-04 bbox
+# crop). Preprocessing MUST match the real-time loop exactly (AD A.3).
+# ---------------------------------------------------------------------------
+split:
+  train: 0.70
+  val:   0.15
+  test:  0.15
+  seed: 42
+  group_by_user: true
+  stratify: true
+
+input:
+  size: 224
+  crop_mode: bbox
+  bbox_pad: 0.15
+
+normalize:
+  mean: [0.485, 0.456, 0.406]
+  std:  [0.229, 0.224, 0.225]
+
+augment:
+  hflip: true
+  rotation_deg: 12
+  translate: 0.06
+  rrc_scale: [0.75, 1.0]
+  brightness: 0.3
+  contrast: 0.3
+  saturation: 0.2
+  hue: 0.02
+
+loader:
+  batch_size: 64
+  num_workers: 4
+  pin_memory: true
+  drop_last: false

@@ -236,8 +236,15 @@ def main() -> None:
     # shows exactly where play.py would put the real cursor. Sized lazily from
     # the first frame; no OS input is ever sent from the demo.
     mapper: CursorMapper | None = None
+    # No-click class for the FSM preview: for a binary click model it's whichever
+    # class isn't "fist" -- "palm" (AD-18) or "not_fist" (Strategy 3.2 / AD-21).
+    # For legacy multi-class checkpoints we leave the "palm" default (the click
+    # preview isn't meaningful there anyway).
+    noclick_label = (next(c for c in lm.classes if c != "fist")
+                     if "fist" in lm.classes and lm.num_classes == 2 else "palm")
     fsm = ClickFSM(k=args.fsm_k, conf_threshold=args.fsm_conf,
-                   cooldown_s=args.click_cooldown, grace=args.fsm_grace)
+                   cooldown_s=args.click_cooldown, grace=args.fsm_grace,
+                   palm_label=noclick_label, fist_label="fist")
     cursor_px: tuple[int, int] | None = None
     click_flash = 0
 
