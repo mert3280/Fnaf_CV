@@ -12,6 +12,9 @@ mapper (`src/rt/cursor.py`), click FSM (`src/control/click_fsm.py`), input layer
 (`src/control/input_sim.py`), and play loop (`src/control/play.py`) are
 implemented and offline-verified. Preview everything without touching the real
 mouse via `webcam_demo`; drive the game via `play` (dry-run first).
+For the **runtime control layer end-to-end** — model prediction → cursor pixel →
+click → OS input, plus every calibration knob and how to set it — see
+[controller-and-calibration.md](controller-and-calibration.md).
 This is the **cursor-control pivot** ([AD-17](../../architecture-and-decisions.md#ad-17--pivot-to-cursor-control-motion-tracked-cursor--binary-click-classifier)).
 It keeps the two-stage pipeline of [Strategy 2](../2-two-stage-mediapipe-crop/02-two-stage-mediapipe-crop.md)
 / [2.1](../2-two-stage-mediapipe-crop/02.1-two-stage-robustness-fixes.md) intact

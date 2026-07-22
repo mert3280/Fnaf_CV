@@ -1,0 +1,283 @@
+/* Hand-tracking eval course — white background, colorful buttons. */
+:root {
+  --green: #22c55e;  --green-d: #16a34a;
+  --blue:  #3b82f6;  --blue-d:  #2563eb;
+  --purple:#8b5cf6;  --purple-d:#7c3aed;
+  --orange:#f97316;  --orange-d:#ea580c;
+  --pink:  #ec4899;  --red: #ef4444;  --yellow:#eab308;
+  --ink: #1e293b;  --muted: #64748b;  --line: #e2e8f0;
+  --shadow: 0 10px 30px rgba(15, 23, 42, .12);
+}
+
+* { box-sizing: border-box; }
+html, body {
+  margin: 0; height: 100%; overflow: hidden;
+  background: #ffffff; color: var(--ink);
+  font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+  cursor: none; /* the hand controller is the pointer; hide the OS arrow */
+}
+body.show-cursor { cursor: auto; } /* survey/done: normal mouse is back */
+
+/* ---------- screens ---------- */
+.screen {
+  position: fixed; inset: 0;
+  display: none; align-items: center; justify-content: center;
+  padding: 24px;
+}
+.screen.active { display: flex; }
+
+/* ---------- cards ---------- */
+.card {
+  max-width: 640px; width: 100%;
+  background: #fff; border: 1px solid var(--line); border-radius: 22px;
+  box-shadow: var(--shadow); padding: 40px 44px; text-align: center;
+}
+.card-wide { max-width: 760px; }
+h1 { font-size: 2.2rem; margin: 0 0 12px; font-weight: 800; }
+.accent { color: var(--purple); }
+.lead { font-size: 1.1rem; color: var(--muted); margin: 0 0 20px; line-height: 1.5; }
+.steps { text-align: left; margin: 0 auto 20px; max-width: 460px; color: var(--ink);
+         line-height: 1.9; padding-left: 20px; }
+.hint { font-size: .95rem; color: var(--muted); margin: 18px 0 26px; }
+kbd { background: #f1f5f9; border: 1px solid var(--line); border-bottom-width: 2px;
+      border-radius: 6px; padding: 1px 7px; font-family: inherit; font-size: .85em; }
+
+/* ---------- buttons ---------- */
+.btn {
+  border: none; border-radius: 14px; color: #fff; font-weight: 700;
+  font-family: inherit; cursor: pointer; box-shadow: var(--shadow);
+  transition: transform .06s ease, filter .15s ease; user-select: none;
+}
+.btn:hover { filter: brightness(1.05); }
+.btn:active { transform: scale(.96); }
+.btn:disabled { background: #cbd5e1 !important; box-shadow: none; cursor: not-allowed; }
+.btn-lg { font-size: 1.15rem; padding: 14px 30px; }
+.btn-xl { font-size: 1.4rem; padding: 18px 44px; }
+.btn-green  { background: var(--green); }
+.btn-blue   { background: var(--blue); }
+.btn-purple { background: var(--purple); }
+.btn-orange { background: var(--orange); }
+
+.tracker-controls { margin: 0 0 14px; }
+.tracker-controls .hint { margin: 10px 0 0; }
+
+/* ---------- strategy picker (fist-vs-rest: 3.2 vs 3.2.1) ---------- */
+.strategy-picker { margin: 0 auto 18px; max-width: 480px; }
+.sp-label { font-size: .72rem; font-weight: 700; letter-spacing: .06em;
+            text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
+.sp-options { display: flex; gap: 8px; justify-content: center; }
+.sp-opt {
+  flex: 1; padding: 11px 12px; border-radius: 12px; border: 2px solid var(--line);
+  background: #fff; color: var(--ink); font-family: inherit; font-weight: 700;
+  font-size: .92rem; cursor: pointer; transition: transform .06s, border-color .12s,
+  background .12s, color .12s;
+}
+.sp-opt:hover:not(:disabled) { border-color: var(--purple); }
+.sp-opt:active:not(:disabled) { transform: scale(.96); }
+.sp-opt.sel { background: var(--purple); border-color: var(--purple); color: #fff; }
+.sp-opt:disabled { opacity: .55; cursor: not-allowed; }
+.sp-blurb { margin: 10px 0 0; min-height: 1.2em; }
+
+/* ---------- welcome tabs (Start / Overview) ---------- */
+.tabs { display: flex; gap: 6px; justify-content: center; margin: 0 0 22px;
+        border-bottom: 1px solid var(--line); }
+.tab {
+  border: none; background: none; font-family: inherit; font-weight: 700;
+  font-size: 1rem; color: var(--muted); cursor: pointer; padding: 10px 20px;
+  border-bottom: 3px solid transparent; margin-bottom: -1px; transition: color .12s;
+}
+.tab:hover { color: var(--ink); }
+.tab.active { color: var(--purple); border-bottom-color: var(--purple); }
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+
+/* ---------- overview: aggregate stat tiles ---------- */
+.ov-agg { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px;
+          margin: 0 0 22px; }
+.ov-tile { background: #f8fafc; border: 1px solid var(--line); border-radius: 14px;
+           padding: 14px 10px; text-align: center; }
+.ov-tile b { display: block; font-size: 1.6rem; color: var(--ink);
+             font-variant-numeric: tabular-nums; line-height: 1.1; }
+.ov-tile span { display: block; font-size: .78rem; color: var(--muted); margin-top: 4px; }
+.ov-tile small { display: block; font-size: .68rem; color: var(--muted); margin-top: 2px; }
+
+/* ---------- overview: per-trial table ---------- */
+.ov-table-wrap { max-height: 42vh; overflow: auto; border: 1px solid var(--line);
+                 border-radius: 14px; }
+.ov-table { width: 100%; border-collapse: collapse; font-size: .86rem;
+            text-align: left; }
+.ov-table th, .ov-table td { padding: 9px 12px; border-bottom: 1px solid var(--line);
+                             white-space: nowrap; }
+.ov-table thead th { position: sticky; top: 0; background: #f8fafc; z-index: 1;
+                     color: var(--muted); font-weight: 700; font-size: .72rem;
+                     letter-spacing: .04em; text-transform: uppercase; }
+.ov-table tbody tr:last-child td { border-bottom: none; }
+.ov-table tbody tr:hover { background: #f8fafc; }
+.ov-table .num { text-align: right; font-variant-numeric: tabular-nums; }
+.ov-table .strat { color: var(--purple); font-weight: 700; }
+.ov-table .muted { color: var(--muted); }
+
+/* ---------- overview: filter + sort bar ---------- */
+.ov-filters { text-align: left; margin: 0 0 14px; display: flex;
+              flex-direction: column; gap: 10px; }
+.ovf-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
+.ovf-field { display: flex; flex-direction: column; gap: 4px; font-size: .68rem;
+             font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
+             color: var(--muted); }
+.ov-filters select, .ov-filters input {
+  font-family: inherit; font-size: .9rem; font-weight: 600; color: var(--ink);
+  padding: 8px 10px; border: 2px solid var(--line); border-radius: 10px;
+  background: #fff; }
+.ov-filters select:focus, .ov-filters input:focus {
+  outline: none; border-color: var(--purple); }
+.ovf-dir { align-self: flex-end; }
+.ovf-op { width: 62px; }
+.ovf-val { width: 96px; }
+.ovf-btn { font-family: inherit; font-weight: 700; font-size: .85rem; cursor: pointer;
+           padding: 9px 14px; border-radius: 10px; border: 2px solid var(--purple);
+           background: var(--purple); color: #fff; }
+.ovf-btn:hover { background: var(--purple-d); border-color: var(--purple-d); }
+.ovf-btn-ghost { background: #fff; color: var(--muted); border-color: var(--line); }
+.ovf-btn-ghost:hover { color: var(--ink); border-color: var(--muted); background: #f8fafc; }
+.ovf-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.ovf-chips:empty { display: none; }
+.ovf-chip { display: inline-flex; align-items: center; gap: 6px; font-size: .8rem;
+            font-weight: 700; color: var(--purple-d); background: #f5f3ff;
+            border: 1px solid #ddd6fe; border-radius: 999px; padding: 4px 6px 4px 12px; }
+.ovf-chip-x { border: none; background: #ddd6fe; color: var(--purple-d);
+              width: 18px; height: 18px; border-radius: 50%; cursor: pointer;
+              font-family: inherit; font-size: .9rem; line-height: 1;
+              display: grid; place-items: center; padding: 0; }
+.ovf-chip-x:hover { background: var(--purple); color: #fff; }
+
+/* ---------- banner (top of each obstacle) ---------- */
+.banner {
+  position: fixed; top: 0; left: 0; right: 0; height: 60px;
+  display: flex; align-items: center; gap: 14px; padding: 0 22px;
+  background: #fff; border-bottom: 1px solid var(--line); z-index: 5;
+}
+.banner-title { font-weight: 700; font-size: 1.05rem; }
+.banner-meta { margin-left: auto; font-variant-numeric: tabular-nums;
+               font-weight: 700; color: var(--muted); }
+.pill { color: #fff; font-weight: 800; font-size: .8rem; padding: 5px 12px;
+        border-radius: 999px; }
+.pill-1 { background: var(--pink); }
+.pill-2 { background: var(--blue); }
+.pill-3 { background: var(--purple); }
+
+/* ---------- obstacle 1: precision box ---------- */
+.play-box {
+  position: absolute; top: 90px; bottom: 40px; left: 6vw; right: 6vw;
+  border: 3px dashed var(--line); border-radius: 20px;
+  background: linear-gradient(0deg, #fafafa, #fff);
+}
+.num-btn {
+  position: absolute; width: 92px; height: 92px; border-radius: 50%;
+  border: none; color: #fff; font-size: 2.4rem; font-weight: 800;
+  cursor: pointer; box-shadow: var(--shadow); transform: translate(-50%, -50%);
+  animation: pop .18s ease; user-select: none;
+}
+@keyframes pop { from { transform: translate(-50%,-50%) scale(.4); opacity: 0; }
+                 to   { transform: translate(-50%,-50%) scale(1);  opacity: 1; } }
+
+/* ---------- obstacle 2: rapid clicks ---------- */
+.ob2-wrap { display: flex; align-items: center; gap: 60px; }
+.btn-round-lg {
+  width: 240px; height: 240px; border-radius: 50%; font-size: 5rem;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  line-height: 1;
+}
+.down-sub { font-size: 1.2rem; letter-spacing: .15em; margin-top: 6px; }
+.depth-track {
+  width: 42px; height: 320px; border-radius: 999px; background: #eef2f7;
+  border: 1px solid var(--line); overflow: hidden; position: relative;
+}
+.depth-fill {
+  position: absolute; left: 0; right: 0; top: 0; height: 0%;
+  background: linear-gradient(180deg, var(--blue), var(--purple));
+  transition: height .25s cubic-bezier(.2,.8,.2,1);
+}
+
+/* ---------- obstacle 3: tracer ---------- */
+.trace-svg { position: absolute; inset: 60px 0 0 0; width: 100%; height: calc(100% - 60px); }
+.trace-line { fill: none; stroke: #cbd5e1; stroke-width: 34;
+              stroke-linecap: round; stroke-linejoin: round; }
+/* Breadcrumb of where the hand actually went after Start is clicked. */
+.trace-trail { fill: none; stroke: var(--pink); stroke-width: 6; opacity: .9;
+               stroke-linecap: round; stroke-linejoin: round; pointer-events: none; }
+.trace-start { fill: var(--yellow); stroke: #fff; stroke-width: 4; }
+.trace-end   { fill: var(--green); stroke: #fff; stroke-width: 4; }
+/* FINISH caption; white outline keeps it readable over the line. */
+.trace-label { font-family: inherit; font-weight: 800; font-size: 15px;
+               letter-spacing: .08em; paint-order: stroke;
+               stroke: #fff; stroke-width: 4px; }
+.trace-label-end   { fill: var(--green-d); }
+.trace-cursor { fill: var(--pink); stroke: #fff; stroke-width: 3; pointer-events: none; }
+/* The start "button" is the yellow start dot, placed at the head of the line
+   (left/top set in JS). Pulsing ring says "click here to begin". */
+.trace-start-btn {
+  position: absolute; transform: translate(-50%, -50%); z-index: 6;
+  width: 60px; height: 60px; border-radius: 50%;
+  border: 4px solid #fff; background: var(--yellow); color: #1e293b;
+  font-family: inherit; font-weight: 800; font-size: .78rem; letter-spacing: .06em;
+  cursor: pointer; user-select: none;
+  box-shadow: 0 0 0 0 rgba(234, 179, 8, .6);
+  animation: startBtnPulse 1.4s ease-out infinite;
+}
+.trace-start-btn:hover  { filter: brightness(1.05); }
+.trace-start-btn:active { transform: translate(-50%, -50%) scale(.94); }
+@keyframes startBtnPulse {
+  0%   { box-shadow: 0 0 0 0    rgba(234, 179, 8, .6); }
+  100% { box-shadow: 0 0 0 26px rgba(234, 179, 8, 0); }
+}
+
+/* ---------- finish summary ---------- */
+.summary { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px;
+           margin: 8px 0 24px; }
+.summary .tile { background: #f8fafc; border: 1px solid var(--line); border-radius: 14px;
+                 padding: 14px 10px; }
+.summary .tile b { display: block; font-size: 1.5rem; color: var(--ink); }
+.summary .tile span { font-size: .82rem; color: var(--muted); }
+
+/* ---------- survey ---------- */
+.survey { text-align: left; margin: 0 0 24px; }
+.q { margin-bottom: 18px; }
+.q-text { font-weight: 600; margin-bottom: 8px; }
+.scale { display: flex; gap: 10px; }
+.scale button {
+  flex: 1; padding: 14px 0; border-radius: 12px; border: 2px solid var(--line);
+  background: #fff; color: var(--ink); font-weight: 800; font-size: 1.1rem; cursor: pointer;
+  transition: transform .06s, background .12s, border-color .12s, color .12s;
+}
+.scale button:hover { border-color: var(--purple); }
+.scale button:active { transform: scale(.94); }
+.scale button.sel-1 { background: var(--red);    border-color: var(--red);    color: #fff; }
+.scale button.sel-2 { background: var(--orange); border-color: var(--orange); color: #fff; }
+.scale button.sel-3 { background: var(--yellow); border-color: var(--yellow); color: #1e293b; }
+.scale button.sel-4 { background: #84cc16;       border-color: #84cc16;       color: #fff; }
+.scale button.sel-5 { background: var(--green);   border-color: var(--green);   color: #fff; }
+
+/* ---------- status chip ---------- */
+.status-chip {
+  position: fixed; top: 12px; left: 12px; z-index: 20;
+  display: flex; align-items: center; gap: 8px;
+  background: #fff; border: 1px solid var(--line); border-radius: 999px;
+  padding: 6px 14px 6px 10px; font-size: .85rem; color: var(--muted);
+  box-shadow: var(--shadow);
+}
+.dot { width: 10px; height: 10px; border-radius: 50%; background: #cbd5e1; }
+.dot.ok   { background: var(--green); }
+.dot.warn { background: var(--orange); }
+.dot.err  { background: var(--red); }
+
+.flash { animation: flash .3s ease; }
+@keyframes flash { 0% { filter: brightness(1.6); } 100% { filter: brightness(1); } }
+
+/* Custom pointer: with the OS arrow hidden, this dot shows where the hand is. */
+#handCursor {
+  position: fixed; z-index: 999; width: 22px; height: 22px; margin: -11px 0 0 -11px;
+  border-radius: 50%; border: 3px solid var(--purple); background: rgba(139, 92, 246, .18);
+  pointer-events: none; transition: transform .04s linear; left: 0; top: 0;
+}
+#handCursor.click { background: var(--pink); border-color: var(--pink); }
+body.show-cursor #handCursor { display: none; }

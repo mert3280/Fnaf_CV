@@ -1,0 +1,34 @@
+Hand-Tracking Evaluation Report
+===============================
+
+Run started: 2026-07-22T04:56:50.179Z
+Run finished: 2026-07-22T04:59:59.363Z
+Viewport: 1707 x 898 px
+
+Obstacle 1 - Precision (buttons 1-5)
+------------------------------------
+  - Time (click 1 -> click 5): 73.79 s
+  - Total incl. acquiring button 1: 105.08 s
+  - Per-button splits: 31.28s, 41.99s, 11.34s, 5.68s, 14.78s
+
+Obstacle 2 - Rapid clicks (down x7)
+-----------------------------------
+  - Time (7 clicks): 8.77 s
+  - Clicks: 7
+  - Click rate: 0.80 clicks/s
+
+Obstacle 3 - Line tracer
+------------------------
+  - Time: 15.73 s
+  - Accuracy score: 51.6 / 100
+  - Mean deviation from line: 35.5 px
+  - Path coverage: 83%
+
+Survey (1 = poor, 5 = excellent)
+--------------------------------
+  - 1. How well were you able to click?  ->  4
+  - 2. How well was your hand tracked?  ->  5
+  - 3. How easy was it to use overall?  ->  3
+  - 4. How easy were the controls to understand?  ->  5
+  - 5. How well did it do what you wanted?  ->  4
+  - Average rating: 4.20 / 5
