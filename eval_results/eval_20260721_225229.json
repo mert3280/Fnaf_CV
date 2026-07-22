@@ -1,0 +1,42 @@
+{
+  "startedAt": "2026-07-22T04:50:23.512Z",
+  "finishedAt": "2026-07-22T04:52:29.586Z",
+  "screen": {
+    "w": 1707,
+    "h": 898
+  },
+  "ob1": {
+    "timeMs": 24276,
+    "totalMs": 31718,
+    "splitsMs": [
+      7442,
+      7293,
+      7277,
+      6895,
+      2809
+    ]
+  },
+  "ob2": {
+    "timeMs": 7197,
+    "clicks": 7
+  },
+  "ob3": {
+    "timeMs": 15316,
+    "accuracy": 60.6,
+    "meanDevPx": 27.7,
+    "coverage": 0.917
+  },
+  "survey": {
+    "q1": 3,
+    "q2": 4,
+    "q3": 3,
+    "q4": 5,
+    "q5": 4
+  },
+  "meta": {
+    "model": "fistvsrest_frozen_mnv3_large",
+    "checkpoint": "models/fistvsrest_frozen_mnv3_large/best.pt",
+    "strategy": "3.2.1 \u00b7 fist-vs-rest (snappy)",
+    "device": "cpu"
+  }
+}

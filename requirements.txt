@@ -25,6 +25,10 @@ pydirectinput
 onnx
 onnxruntime
 
+# Evaluation dashboard (src/eval_dashboard) -- local web obstacle course
+flask
+python-docx  # optional: real .docx reports; results.py falls back to .txt without it
+
 # Notes:
 # - Install torch/torchvision for your CUDA build from https://pytorch.org
 #   (the RTX 4060 training box uses a CUDA wheel; this repo was also run CPU-only).

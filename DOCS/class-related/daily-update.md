@@ -310,6 +310,46 @@ _(Note: DOCS was reorganized into `build/`, `AI/`, `class-related/`, `models/` b
 
 ## 2026-07-21
 
+### Interactive hand-tracking evaluation dashboard (new `src/eval_dashboard/`)
+- **Goal (Ted's ask):** a browser "obstacle course" that measures how well the hand controller performs, then collects a 1–5 survey — a way to quantify the controller Ted has been tuning, not just eyeball it.
+- **Architecture:** a Flask app that *owns* the Strategy-3 control loop. `tracker.py` lifts `play.py`'s per-frame pipeline (detector → cursor mapper → CNN → click FSM → `InputSim`) into a start/stop background thread; the browser is driven by the **real** cursor + real clicks it emits, so every obstacle exercises the actual controller. `server.py` serves the SPA and exposes `/api/status`, `/api/finish` (kill-switch: stops the tracker so the survey uses the normal mouse), `/api/results` (writes the doc). All tracker flags mirror `play.py` so a tuned run carries over.
+- **Three obstacles (front-end `static/`):** (1) **Precision** — buttons 1→5 pop at random spots inside a fixed box (no scrolling); timed click-1→click-5 + per-button splits. (2) **Rapid clicks** — a DOWN button pressed 7× with a filling depth gauge; timed. (3) **Tracer** — trace an SVG sine line start→green dot; per-frame deviation → 0–100 accuracy score + path-coverage gate so you can't skip to the end. Then a **Finish** button stops the tracker and a 5-question survey (the exact prompts Ted specified) is answered with the mouse.
+- **Results storage:** `results.py::save_results` writes a human-readable report — a real `.docx` when `python-docx` is installed, else a `.txt` fallback — plus a `.json` sibling for analysis, to `eval_results/`.
+- **UX:** white background, colorful buttons, hidden OS arrow replaced by a custom purple pointer dot (hand drives it), a live tracker-status chip (label/conf/fps/clicks). ESC remains the global kill-switch (CLAUDE.md).
+- **Verified:** `save_results` end-to-end (report formatting correct); server boots and all four routes respond (`--no-tracker --no-browser` smoke test). **Not yet run live** with the camera + `palmfist`/`fistvsrest` checkpoint driving real input — that's Ted's next step (`python -m src.eval_dashboard.server --checkpoint models/palmfist_frozen_mnv3_large/best.pt`, F11 fullscreen).
+- **AI use:** Claude designed and implemented the dashboard end-to-end (thread wrapper, Flask API, front-end obstacle logic, doc writer) at Ted's request; obstacle scoring thresholds (reach/end tolerance, accuracy DEV_MAX, coverage gate) are starting points for Ted to tune. Log in `AI-usage.md`.
+
+### Files changed
+- New: `src/eval_dashboard/{__init__,tracker,results,server}.py`; `src/eval_dashboard/static/{index.html,style.css,app.js}`
+- Changed: `DOCS/class-related/daily-update.md`
+
+### Tracer obstacle clarity pass (dashboard Obstacle 3)
+- **Goal (Ted's ask):** make the tracer easier to understand — clearly mark the start, and once tracing begins draw a line showing where the hand actually went.
+- **Changes (front-end only):** (1) the target path now **previews** on entry (was hidden until Start was clicked), with a **labeled `START`** (yellow) and **`FINISH`** (green) caption on each dot and a **pulsing halo** around the start dot to draw the eye; the pulse stops when tracing begins. (2) A live **pink breadcrumb `<polyline>`** records the cursor path from the moment Start is clicked, so the tester sees their actual route vs. the target line; it clears on each (re)start and persists through the finish summary. Banner title updated to name the yellow start dot. No scoring/threshold logic changed — coverage/accuracy/timing untouched.
+- **Verified:** `node --check app.js` passes. Not yet eyeballed live in the browser — Ted's next run.
+- **AI use:** Claude implemented the UX changes at Ted's request. Log in `AI-usage.md`.
+- Changed: `src/eval_dashboard/static/{index.html,style.css,app.js}`
+
+### Controller & calibration reference doc (new)
+- **Goal (Ted's ask):** a doc explaining how a model prediction becomes a real cursor move + click — the end-to-end runtime control layer and its calibration knobs, in one place.
+- **New doc** `DOCS/build/strategies/3-cursor-and-click/controller-and-calibration.md`: walks the per-frame chain (detect/mirror/crop → **stage 1** cursor mapping: anchor → control box → clamp → EMA → dead-zone → screen pixel → `InputSim.move_to`; **stage 2** CNN softmax → `ClickFSM` confidence gate + K-frame confirm + grace → `InputSim.click`), a mermaid overview of both branches, the DirectX/DPI/kill-switch input facts, and two **calibration tables** (cursor knobs + click knobs) with raise-it/lower-it guidance keyed to `play.py` CLI flags. Grounded in the actual code (`cursor.py`, `click_fsm.py`, `input_sim.py`, `play.py`); no new decisions — defers cursor/FSM tuning to Ted per CLAUDE.md. Includes the plan.md Step-5 day-1 registration check.
+- **Changed:** added a pointer to the new doc near the top of `03-cursor-and-click.md`.
+- **AI use:** Claude wrote the reference doc from the existing runtime modules at Ted's request. Log in `AI-usage.md`.
+- New: `DOCS/build/strategies/3-cursor-and-click/controller-and-calibration.md`
+- Changed: `DOCS/build/strategies/3-cursor-and-click/03-cursor-and-click.md`; `DOCS/class-related/daily-update.md`
+
+### Dashboard Overview tab + run history (previous-trials view)
+- **Goal (Ted's ask):** an Overview tab on the start screen showing metrics/results from previous trials — score overviews plus the model and strategy each run used.
+- **Front-end:** the welcome card now has **Start / Overview** tabs. Overview shows (1) an aggregate **stat-tile row** — trials recorded, best precision time (+avg), best trace accuracy (+avg), average survey rating — and (2) a scrollable **per-trial table** (newest first): when, model, strategy, precision/rapid times, trace accuracy, survey avg. Built with the existing design tokens (stat tiles + recessive table, tabular-nums, sticky header); numbers stay on ink colors, no color-coded series (followed the dataviz skill's form guidance — headline scores are stat tiles, detail is a table).
+- **Back-end:** new `GET /api/history` returns compact summaries of every `eval_results/*.json` (new `results.summarize_run`), newest first, tolerant of older runs missing fields. `POST /api/results` now **stamps a `meta` block** (model = checkpoint dir name, derived strategy label — `3.2 · fist-vs-rest` / `3.0 · palm/fist` / generic — device) onto each saved run so the Overview can attribute scores; older runs (no meta) render as "—". Strategy/model derived server-side from `--checkpoint` (`_derive_meta`); `--no-tracker` runs label as a mouse UI test.
+- **Verified:** `summarize_run` over the 3 existing runs; `/api/history` returns them; a test POST confirmed the `meta` block is written (`palmfist_frozen_mnv3_large`, `3.0 · palm/fist`, cpu) then cleaned up. Not yet eyeballed live — Ted's browser check.
+- **AI use:** Claude implemented the tab, history API, and run-meta stamping at Ted's request. Log in `AI-usage.md`.
+- Changed: `src/eval_dashboard/{server,results}.py`; `src/eval_dashboard/static/{index.html,style.css,app.js}`
+
+### Backfilled model/strategy meta on the 3 existing eval runs
+- The three `eval_results/eval_20260721_*.json` trials predate the dashboard's `meta` block, so the Overview tab (`summarize_run`) showed them with null model/strategy. All three were run with the current model, so hand-added a `meta` block to each (`model` fistvsrest_frozen_mnv3_large, `strategy` "3.2 · fist-vs-rest", `checkpoint`, `device` cpu) — matching exactly what `server._derive_meta` stamps on new runs. Verified all three parse via `summarize_run`.
+- Changed: `eval_results/eval_20260721_140459.json`, `eval_results/eval_20260721_141942.json`, `eval_results/eval_20260721_142253.json`
+
 ### Strategy 3.2.1 — snappier click FSM as a selectable preset
 - **Goal (Ted's ask):** create a Strategy 3.2.1 = the 3.2 model with the click FSM retuned to **conf 0.80 / K 2**, document it, make it testable, and let the eval dashboard run **either 3.2 or 3.2.1**. (Ted directed the values; per CLAUDE.md this is his tuning call — I implemented, didn't decide.)
 - **Single source of truth:** new `src/control/strategies.py` defines the FSM presets (`3.2` = 0.70/3, `3.2.1` = 0.80/2) plus `resolve_fsm()` (explicit `--fsm-conf`/`--fsm-k` override the preset, preset overrides the AD-20 base defaults). Both `play.py` and the dashboard import it so the numbers can't drift.
@@ -320,3 +360,14 @@ _(Note: DOCS was reorganized into `build/`, `AI/`, `class-related/`, `models/` b
 - **AI use:** Claude implemented the preset module, CLI/dashboard wiring, UI, and docs at Ted's request (Ted set the 0.80/2 values). Log in `AI-usage.md`.
 - New: `src/control/strategies.py`; `DOCS/build/strategies/3-cursor-and-click/03.2.1-snappier-fsm.md`
 - Changed: `src/control/play.py`; `src/eval_dashboard/server.py`; `src/eval_dashboard/static/{index.html,app.js,style.css}`; `DOCS/build/strategies/README.md`; `DOCS/build/architecture-and-decisions.md`
+
+### Dashboard Overview tab — filter + sort controls
+- **Goal (Ted's ask):** on the Overview tab, filter past trials by any metric (e.g. `accuracy > 50`, `precision < 5s`) and by strategy/model, plus a sort-by control.
+- **Front-end only** (`static/{index.html,app.js,style.css}`), no server/API change — all filtering/sorting runs client-side over the runs `/api/history` already returns. Added a control bar above the per-trial table:
+  - **Strategy** and **Model** dropdowns, auto-populated from the unique values present in the loaded runs (selection preserved across reloads; syncs out if a value disappears).
+  - **Composable metric filters:** pick a metric (Precision / Rapid seconds, Trace accuracy, Survey) + operator (`> ≥ < ≤ =`) + value → **Add filter**; each becomes a removable chip. Filters AND together. Time metrics are compared in **seconds** (the units shown in the table), so `precision < 5` means 5 s not 5 ms. Enter in the value box adds the filter; **Clear all** resets everything.
+  - **Sort by** any metric or Date, with a High→Low / Low→High direction toggle. Runs missing a value sink to the bottom.
+- The **aggregate stat tiles now reflect the filtered set** (count tile reads "N of M trials shown" when a filter is active); an empty filter result shows "No trials match these filters" while keeping the controls visible to adjust. Built with existing design tokens (purple accents, recessive selects, pill chips) — consistent with the rest of the card.
+- **Verified:** `node --check app.js` passes. Logic exercised by reading through the filter/sort/render path; **not yet eyeballed live** — Ted's browser check on the Overview tab.
+- **AI use:** Claude implemented the filter/sort UI and client-side logic at Ted's request. Log in `AI-usage.md`.
+- Changed: `src/eval_dashboard/static/{index.html,app.js,style.css}`
