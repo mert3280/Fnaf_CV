@@ -34,6 +34,7 @@ import torch
 
 from src.control.click_fsm import ClickFSM
 from src.control.input_sim import InputSim, screen_size
+from src.control.strategies import FSM_PRESETS, resolve_fsm
 from src.rt.cursor import CursorMapper, hand_anchor_norm, palm_span
 from src.rt.model_loader import load_checkpoint
 from src.rt.preprocess import Preprocessor
@@ -71,8 +72,14 @@ def parse_args() -> argparse.Namespace:
     ap.add_argument("--deadzone", type=float, default=0.005,
                     help="min normalized move before the cursor budges")
     # click FSM (AD-20) -- Ted's tuning surface
-    ap.add_argument("--fsm-k", type=int, default=3, help="consecutive confident frames to confirm")
-    ap.add_argument("--fsm-conf", type=float, default=0.70, help="min confidence per frame")
+    ap.add_argument("--strategy", choices=list(FSM_PRESETS), default=None,
+                    help="named click-FSM preset (sets conf + K): "
+                         + "; ".join(f"{k} = {v.blurb}" for k, v in FSM_PRESETS.items())
+                         + ". Explicit --fsm-conf / --fsm-k override it.")
+    ap.add_argument("--fsm-k", type=int, default=None,
+                    help="consecutive confident frames to confirm (default 3, or the --strategy preset)")
+    ap.add_argument("--fsm-conf", type=float, default=None,
+                    help="min confidence per frame (default 0.70, or the --strategy preset)")
     ap.add_argument("--fsm-grace", type=int, default=10,
                     help="ambiguous frames tolerated before disarm (3.1.1)")
     ap.add_argument("--cooldown", type=float, default=0.30, help="min seconds between clicks")
@@ -160,7 +167,9 @@ def main() -> None:
         alpha=args.cursor_alpha, deadzone=args.deadzone,
         mirror_x=args.no_mirror,  # un-mirrored frame -> mapper does the mirror
     )
-    fsm = ClickFSM(k=args.fsm_k, conf_threshold=args.fsm_conf,
+    # --strategy sets (conf, K); explicit --fsm-conf/--fsm-k still override it.
+    fsm_conf, fsm_k = resolve_fsm(args.strategy, conf=args.fsm_conf, k=args.fsm_k)
+    fsm = ClickFSM(k=fsm_k, conf_threshold=fsm_conf,
                    cooldown_s=args.cooldown, grace=args.fsm_grace,
                    palm_label=noclick_label, fist_label="fist")
     sim = InputSim(dry_run=args.dry_run)
@@ -168,8 +177,9 @@ def main() -> None:
 
     box_txt = (f"box adaptive gain={args.box_gain}" if args.box_mode == "adaptive"
                else f"box {args.box_w:.2f}x{args.box_h:.2f}")
+    strat_txt = f"strategy {args.strategy}  " if args.strategy else ""
     print(f"screen {screen[0]}x{screen[1]}  {box_txt}  "
-          f"alpha {args.cursor_alpha}  K={args.fsm_k}  conf>={args.fsm_conf}  "
+          f"alpha {args.cursor_alpha}  {strat_txt}K={fsm_k}  conf>={fsm_conf}  "
           f"grace {args.fsm_grace}  cooldown {args.cooldown}s  "
           f"{'DRY-RUN' if args.dry_run else 'LIVE'}")
     if not args.dry_run:
