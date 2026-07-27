@@ -16,14 +16,20 @@ remotezip
 tensorboard
 matplotlib
 
+# Experiment tracking + tuning (Week 3: MLflow store; Week 4: registry + Optuna)
+mlflow>=3.0        # tracking store AND the model registry (./mlruns, file-backed)
+optuna>=4.0        # TPE sampler for the src/tune.py hyper-parameter search
+requests           # used by scripts/capture_endpoint_transcript.py to call the endpoint
+
 # Real-time pipeline (Phases 4-5)
 opencv-python
 mediapipe
 pydirectinput
 
-# Export / inference (Phase 3+)
+# Export / inference (Phase 3+, AD-11)
 onnx
 onnxruntime
+onnxscript        # torch>=2.6's ONNX exporter imports this; export fails without it
 
 # Evaluation dashboard (src/eval_dashboard) -- local web obstacle course
 flask

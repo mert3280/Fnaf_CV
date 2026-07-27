@@ -17,6 +17,7 @@ def build_model(
     freeze_backbone: bool = True,
     pretrained: bool = True,
     unfreeze_blocks: int = 0,
+    head_init: str = "timm_default",
 ) -> nn.Module:
     """Create a timm backbone with a fresh `num_classes` head.
 
@@ -28,13 +29,51 @@ def build_model(
     (Strategy-2.1 fix #5 / AD-08 Stage B). Default 0 = fully frozen (current
     behavior, unchanged). *How many* blocks to unfreeze and *when* is Ted's
     modeling call -- this only provides the mechanism.
+
+    `head_init` selects the head initialization; the default keeps timm's, so
+    this signature change cannot move any existing number. See init_classifier().
     """
     model = timm.create_model(name, pretrained=pretrained, num_classes=num_classes)
+    init_classifier(model, head_init)
     if freeze_backbone:
         freeze_all_but_head(model)
         if unfreeze_blocks > 0:
             unfreeze_last_n_blocks(model, unfreeze_blocks)
     return model
+
+
+HEAD_INIT_MODES = ("timm_default", "pytorch_linear")
+
+
+def init_classifier(model: nn.Module, mode: str = "timm_default") -> str:
+    """Re-initialize the classification head. Returns the mode applied.
+
+    WHY THIS KNOB EXISTS (measured 2026-07-26, Week-4 tuning). timm's
+    EfficientNet-family `_init_weights` initializes a `Linear` head as
+    `U(-r, r)` with `r = 1/sqrt(fan_out)` -- where `fan_out` is the number of
+    **output classes**, not the 1280 input features. For ImageNet's 1000-class
+    head that is a sane r=0.032; for our **2-class** head it is r=0.707, ~25x
+    PyTorch's own `Linear` default of `1/sqrt(1280)=0.028`. Over 1280-d pooled
+    features that starts the probe at logits of +/-27 and cross-entropy **2.70**
+    instead of ln(2)=0.69, so the first ~30 epochs are spent shrinking the init
+    rather than learning. This is exactly the "val still climbing at ep40" note in
+    DOCS/models/fistvsrest_frozen_mnv3_large/README.md.
+
+      * `timm_default`   -- leave timm's init untouched. THE DEFAULT, so every
+                            previously committed run stays bit-reproducible.
+      * `pytorch_linear` -- `reset_parameters()` on the head: PyTorch's standard
+                            `kaiming_uniform` bounded by 1/sqrt(in_features).
+
+    Whether `pytorch_linear` becomes the project default is Ted's modeling call
+    (see the Week-4 report §1); this only exposes both, measurably.
+    """
+    if mode not in HEAD_INIT_MODES:
+        raise ValueError(f"head_init must be one of {HEAD_INIT_MODES}, got {mode!r}")
+    if mode == "pytorch_linear":
+        for m in model.get_classifier().modules():
+            if hasattr(m, "reset_parameters"):
+                m.reset_parameters()
+    return mode
 
 
 def freeze_all_but_head(model: nn.Module) -> None:

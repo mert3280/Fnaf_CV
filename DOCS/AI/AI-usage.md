@@ -81,4 +81,31 @@ Template for each entry:
 
 ---
 
-<!-- Append Week 4..5 entries below as the project progresses. -->
+## Week 4 — Tuning, Orchestration & Deployment (2026-07-26)
+
+### Tasks AI assisted with
+- **Tuning harness (`src/tune.py`, `configs/tune_fistvsrest.yaml`):** Claude Code built the two-arm search — a TPE (Optuna) search over head/optimizer hyper-parameters trained on **cached frozen-backbone features**, plus an end-to-end grid over the structural levers (`unfreeze_blocks` × augmentation) — with every trial logged as its own MLflow run, seed-repeat re-checks of the top-3, and a `--stage final` that reads the test split once and registers the model.
+- **A real diagnostic, not just glue:** I asked for a **pre-tuning baseline re-run inside the new harness** before trusting any "post-tuning" number. It came back **0.9740** where the deployed model recorded **0.9221**, and the drift check I'd asked for fired. Claude traced it to timm's EfficientNet-family head init (`r = 1/sqrt(out_features)` → ±0.707 weights → ±27 logits → CE 2.70 at init on a 2-class head) and proved it by ablation: same recipe, same seed, same features, init the only change. That is the biggest single number in this week's report, and it came out of insisting on the control run.
+- **Orchestration (`src/pipeline/`):** DAG engine (topological order, per-task freshness, retries, upstream-failure propagation, JSON run records) + the task definitions + `--if-data-changed` event trigger.
+- **Serving (`src/serve/`):** the MLflow **pyfunc** artifact that carries its own preprocessing and returns a click decision, and the Flask endpoint that serves whichever registry version holds the `champion` alias. Plus ONNX export with a torch-parity check (AD-11).
+- **Evidence generation:** `src/eval_final.py` (confusion matrix, click-gate sweep, sample predictions with confidences, unseen-gesture probe), `scripts/mlflow_export_tuning.py`, `scripts/capture_endpoint_transcript.py` (boots the server and records real requests/responses), and `scripts/render_pipeline_diagram.py` — which renders the flowchart **from the DAG definitions**, so the diagram can't drift from the code.
+- **Docs:** the Week-4 report, AD-22/23/24, the plan update, and this entry.
+
+### Prompts / context that worked well
+- **"Make sure the pre/post comparison is apples-to-apples in the same harness, and fail loudly if it isn't."** This is what caught the head-init issue. Asking for a *control run* rather than a *result* was the highest-value instruction of the week.
+- **Pointing at the deployed model's own record** (`DOCS/models/fistvsrest_frozen_mnv3_large/README.md`, which flagged "val still climbing at ep40 … more epochs / unfreeze / augmentation remain Ted's call") gave the tuner its agenda straight from my notes rather than a generic sweep.
+- **Stating the compute budget up front** (CPU-only box, ~15 img/s fwd+bwd) made Claude benchmark first and then *justify* the search design around it — cheap Bayesian search on cached features, small hand-picked grid for the expensive levers — instead of proposing a 500-trial sweep that would never finish.
+- **"Generate the diagram from the code"** — better than describing the pipeline twice.
+
+### AI output that needed correction / guidance
+- **The 5-point "tuning win" was not a tuning win.** Claude's first two trials cleared the baseline by ~5 points and, taken at face value, would have gone in the report as evidence that hyper-parameter search transformed the model. It was the harness's head init. Corrected into a **three-rung ladder** (deployed baseline → init fixed → HP search) that reports the init as an init effect and the search as the ~1-point improvement it actually is. The tuner now runs both baselines every time so the mistake can't recur silently.
+- **Head-init default left alone.** Claude was ready to change the project default. I had it ship `head_init` as an **opt-in knob with `timm_default` preserved**, so every committed number stays reproducible, and recorded the default change as **AD-22 Proposed — my call**, not a silent flip.
+- **Diagram layout** needed two rounds: the first render had the panel titles overlapping the subtitles and the bottom row of nodes clipped by the frame.
+- **Scope pushback I accepted:** the "DAG / scheduled or event-based" rubric wording invites Airflow. Claude proposed and I agreed to a ~200-line local task graph with an event trigger instead, documented as AD-23 with the honest reason (a static dataset has nothing for a scheduler to do) — the same deviation stance as Week 2's ingestion note.
+
+### Net assessment
+- As planned, and the line held where it matters. AI wrote the harness, the orchestration, the serving layer, and the report scaffolding; **I own the reading of the results** — that the headline gain is an initialization artifact and not a tuning triumph, that the search's real contribution is ~1 point, that the head-init default stays my decision (AD-22 Proposed), and that the click-gate operating point is chosen from the sweep rather than by the argmax. One caution for Week 5: the tooling now generates numbers faster than I can interpret them, and the head-init episode is exactly the failure mode that creates — a plausible improvement that is really a harness difference. The drift-check pattern (always re-run the old recipe in the new code) is staying.
+
+---
+
+<!-- Append Week 5 entry below as the project progresses. -->

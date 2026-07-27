@@ -1,0 +1,135 @@
+{
+  "dag": "training",
+  "trigger": "manual",
+  "started": "2026-07-26T21:38:20-06:00",
+  "forced": false,
+  "dry_run": false,
+  "tasks": [
+    {
+      "task": "ingest_check",
+      "status": "succeeded",
+      "attempts": 1,
+      "seconds": 3.19,
+      "outputs": {
+        "image_counts": {
+          "train_val/palm": 984,
+          "train_val/one": 960,
+          "train_val/two_up": 923,
+          "train_val/like": 983,
+          "train_val/dislike": 982,
+          "train_val/mute": 990,
+          "train_val/fist": 997,
+          "subsample/palm": 98,
+          "subsample/one": 98,
+          "subsample/two_up": 93,
+          "subsample/like": 98,
+          "subsample/dislike": 96,
+          "subsample/mute": 98,
+          "subsample/fist": 100
+        },
+        "total_images": 7500
+      },
+      "error": null
+    },
+    {
+      "task": "index_and_split",
+      "status": "cached",
+      "attempts": 0,
+      "seconds": 0.0,
+      "outputs": {},
+      "error": null
+    },
+    {
+      "task": "cache_features",
+      "status": "cached",
+      "attempts": 0,
+      "seconds": 0.0,
+      "outputs": {},
+      "error": null
+    },
+    {
+      "task": "tune_search",
+      "status": "cached",
+      "attempts": 0,
+      "seconds": 0.0,
+      "outputs": {},
+      "error": null
+    },
+    {
+      "task": "tune_structural",
+      "status": "cached",
+      "attempts": 0,
+      "seconds": 0.0,
+      "outputs": {},
+      "error": null
+    },
+    {
+      "task": "select_and_register",
+      "status": "cached",
+      "attempts": 0,
+      "seconds": 11.12,
+      "outputs": {},
+      "error": null
+    },
+    {
+      "task": "evaluate",
+      "status": "succeeded",
+      "attempts": 1,
+      "seconds": 52.16,
+      "outputs": {
+        "test_accuracy": 1.0,
+        "macro_f1": 1.0,
+        "figures": [
+          "01_confusion_matrix.png",
+          "02_click_gate_sweep.png",
+          "03_sample_predictions.png",
+          "04_openset_predictions.png",
+          "10_tuning_ladder.png",
+          "11_search_surface.png",
+          "12_registered_model.png"
+        ]
+      },
+      "error": null
+    },
+    {
+      "task": "export_onnx",
+      "status": "succeeded",
+      "attempts": 1,
+      "seconds": 15.3,
+      "outputs": {
+        "path": "models/week4_tuned_fistvsrest/model.onnx",
+        "max_abs_diff_vs_torch": 7.152557373046875e-07,
+        "size_mb": 17.09,
+        "dynamic_batch": true
+      },
+      "error": null
+    },
+    {
+      "task": "serve_smoke",
+      "status": "succeeded",
+      "attempts": 1,
+      "seconds": 8.63,
+      "outputs": {
+        "health": {
+          "backend": "mlflow-pyfunc",
+          "model_source": "models:/fnaf-click-classifier@champion",
+          "model_version": 1,
+          "status": "ok"
+        },
+        "prediction": {
+          "click": true,
+          "confidence": 0.974424,
+          "label_index": 1,
+          "p_click": 0.974424,
+          "predicted_class": "fist"
+        },
+        "latency_ms": 132.31,
+        "model_version": 1
+      },
+      "error": null
+    }
+  ],
+  "finished": "2026-07-26T21:39:50-06:00",
+  "status": "succeeded",
+  "failed_tasks": []
+}
