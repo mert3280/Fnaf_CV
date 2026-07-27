@@ -1,0 +1,95 @@
+# Week-4 hyper-parameter tuning (M4A1 §1) for the DEPLOYED click classifier,
+# `fistvsrest_frozen_mnv3_large` (AD-21). Baseline to beat: val 0.9221 /
+# test 0.9358, whose record explicitly flags "more epochs, unfreeze_blocks,
+# augmentation" as the untried levers -- this file is those levers, made explicit.
+#
+# Two arms, because the compute budget is a CPU box (~15 img/s fwd+bwd, ~22 img/s
+# fwd-only). See DOCS/class-related/week4/tuning-orchestration-report.md §1.
+#   Arm A  head/optimizer search on CACHED frozen features -- mathematically
+#          identical to the frozen end-to-end loop, ~1000x cheaper, so it can
+#          afford a real 60-trial Bayesian (TPE) search.
+#   Arm B  the STRUCTURAL levers that invalidate the cache (unfrozen blocks,
+#          augmentation) -- a small hand-picked grid, because each cell costs
+#          ~25 min of CPU and there are only a few interpretable settings.
+#
+# Selection is on VAL only. The test split is touched exactly once, by
+# `--stage final`, for the single registered model (AD-10).
+
+data_config: configs/data_fistvsrest.yaml   # classes: [not_fist, fist], balance: true
+
+model:
+  backbone: mobilenetv3_large_100   # unchanged (AD-07): real-time budget, not accuracy-chasing
+  num_classes: 2
+  pretrained: true
+
+mlflow:
+  experiment: fnaf-week4-tuning
+  registered_model: fnaf-click-classifier
+
+# --------------------------------------------------------------------------- #
+# Pre-tuning reference: the DEPLOYED model's exact recipe, re-run inside the
+# tuner's own harness. Without this, a "post-tuning" number could just be a
+# difference between two code paths rather than a real gain. `expect_val_acc` is
+# the committed baseline (DOCS/models/fistvsrest_frozen_mnv3_large/results.md);
+# the tuner prints a loud HARNESS DRIFT warning if it can't reproduce it.
+# --------------------------------------------------------------------------- #
+baseline:
+  name: baseline_reference
+  epochs: 40            # what the deployed run actually used (no early stopping)
+  expect_val_acc: 0.9221
+  tolerance: 0.02
+  params:
+    lr: 0.001
+    weight_decay: 0.0001
+    optimizer: adamw
+    batch_size: 64
+    label_smoothing: 0.0
+
+# --------------------------------------------------------------------------- #
+# Arm A -- Bayesian (TPE) search over the head/optimizer hyper-parameters.
+# Ranges are deliberately wide around the untuned defaults (lr 1e-3, wd 1e-4,
+# adamw, bs 64, no smoothing) so the search can say "the default was fine" --
+# that is a real result, not a failed run.
+# --------------------------------------------------------------------------- #
+search:
+  sampler: tpe          # tpe | random  (random is the documented control)
+  trials: 60
+  seed: 42
+  # NOT a search dimension: `head_init` is a 2-level ablation (see `baseline`
+  # above), kept out of the space so it can't confound the TPE surface.
+  head_init: pytorch_linear
+  max_epochs: 150       # baseline used 40 and val was STILL CLIMBING -> give it room
+  patience: 30          # early stop on no val-acc improvement; best epoch is logged
+  space:
+    lr:              {type: loguniform,  low: 1.0e-4, high: 1.0e-1}
+    weight_decay:    {type: loguniform,  low: 1.0e-6, high: 1.0e-2}
+    optimizer:       {type: categorical, choices: [adamw, adam, sgd]}
+    batch_size:      {type: categorical, choices: [32, 64, 128]}
+    label_smoothing: {type: uniform,     low: 0.0,    high: 0.1}
+
+# Re-run the top-K Arm-A configs on extra seeds. val is only 308 images, so one
+# image = 0.32% -- without this, a 0.5% "win" is indistinguishable from noise.
+seed_repeat:
+  top_k: 3
+  seeds: [42, 1337, 2026]
+
+# --------------------------------------------------------------------------- #
+# Arm B -- structural grid, end-to-end (no feature cache possible).
+# `backbone_lr_mult` is NOT swept (CPU budget): unfrozen backbone blocks train at
+# lr * 0.1, the standard fine-tuning convention. Flagged as untuned in the report.
+# `aug_live` uses the Strategy-2.1 fix-#3 knobs (perspective + blur) that target
+# the webcam/arm's-length domain gap; the magnitudes below are STARTING POINTS
+# proposed for Ted's review, not a tuned result.
+# --------------------------------------------------------------------------- #
+structural:
+  epochs: 15            # unfrozen/augmented runs converge far faster than a linear probe
+  backbone_lr_mult: 0.1
+  runs:
+    - {name: aug_only,        unfreeze_blocks: 0, augment: true}
+    - {name: unfreeze1,       unfreeze_blocks: 1, augment: false}
+    - {name: unfreeze2,       unfreeze_blocks: 2, augment: false}
+    - {name: unfreeze2_aug,   unfreeze_blocks: 2, augment: true}
+    - {name: unfreeze2_auglive, unfreeze_blocks: 2, augment: true,
+       augment_overrides: {perspective: 0.25, blur_sigma: 1.0}}
+
+out_dir: models/week4_tuned_fistvsrest

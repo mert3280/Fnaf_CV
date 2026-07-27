@@ -32,7 +32,9 @@ AI is used to **accelerate scaffolding and debugging, not to replace the learnin
 
 - **Claude Code** (primary) — in-repo agent for scaffolding, debugging, docs, and code review, governed by [`CLAUDE.md`](../CLAUDE.md).
 - **Claude (chat)** — design discussion and concept explanation (transfer learning, ONNX export).
-- **MLflow** (added Week 3) — experiment store for the training runs. Claude wrote the logging/export glue (`scripts/mlflow_*.py`); **I own which metrics matter and the honesty of every number logged.**
+- **MLflow** (added Week 3; **Model Registry** added Week 4) — experiment store for the training runs and the version/alias record for the deployed model. Claude wrote the logging/export/registration glue (`scripts/mlflow_*.py`, `src/serve/pyfunc_model.py`); **I own which metrics matter and the honesty of every number logged.**
+- **Optuna** (added Week 4) — the TPE sampler behind the hyper-parameter search in `src/tune.py`. Claude wrote the search harness; **I own the search space, the budget, and the reading of the results.**
+- **Flask + ONNX Runtime** (added Week 4) — the inference endpoint and the parity-checked export (AD-11/AD-24). Serving plumbing is squarely in the "AI may drive" column.
 - Possible: Copilot-style inline completion for small boilerplate.
 
 ## Honesty & attribution policy
@@ -46,5 +48,7 @@ AI is used to **accelerate scaffolding and debugging, not to replace the learnin
 At the end of each week I will: (1) append that week's entry to `AI-usage.md`, and (2) revise this file if my intended usage changed (e.g. I leaned on AI more/less than planned, or a new tool entered the workflow).
 
 **Week-2 note (2026-07-12):** usage matched the plan — AI drove the EDA notebook, the overfit-single-batch validation, and the data-understanding report scaffolding; I retained the modeling calls those docs report (crop adoption, by-user split, ≥90% target). The living plan now lives in [implementation-plan.md](../legacy/phases/implementation-plan.md) *(moved to legacy with the 2026-07-14 pivot — current plan: [plan.md](../build/plan.md))*, and the Week-2 deliverables in [week2/](../class-related/week2/).
+
+**Week-4 note (2026-07-26):** three **new tools** entered the workflow — **Optuna**, the **MLflow Model Registry**, and **Flask/ONNX Runtime** for serving (all logged above). Usage matched the plan, and the "I must drive" line proved its worth: the tuner's first results beat the deployed baseline by ~5 points, and because I insisted on a **control run of the old recipe inside the new harness**, that gain turned out to be timm's 2-class **head initialization**, not hyper-parameter search. I own that reading — the report presents it as a three-rung ladder (baseline → init fixed → search), and whether the fixed init becomes the project default is recorded as **[AD-22 Proposed](../build/architecture-and-decisions.md#ad-22--head-initialization-for-a-2-class-head--proposed-2026-07-26--teds-call), pending my decision**, not silently flipped. Standing rule going forward: **any new harness must reproduce the previous number before I believe a new one.** Full detail in [AI-usage.md → Week 4](AI-usage.md).
 
 **Week-3 note (2026-07-19):** one **new tool** entered the workflow — **MLflow** (logged above). Usage still matched the plan: AI wrote the MLflow logging/export glue and drafted the [ML experimentation report](../class-related/week3/ml-experimentation-report.md), but every logged number is a real recorded result (transcribed from `DOCS/models/`), and the **model-selection call** (`palmfist_frozen` → Week-4 tuning) and the **train/serve honesty caveat** are mine. Full detail in [AI-usage.md → Week 3](AI-usage.md).

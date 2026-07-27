@@ -1,0 +1,146 @@
+{
+  "data_config": "configs/data_fistvsrest.yaml",
+  "sizes": {
+    "train": 1559,
+    "val": 308,
+    "test": 327
+  },
+  "exact_duplicates": {
+    "unique_hashes": 2194,
+    "indexed_images": 2194,
+    "cross_split_duplicate_files": 0,
+    "examples": []
+  },
+  "user_grouping": {
+    "images": 2194,
+    "unique_user_ids": 1569,
+    "median_images_per_user": 1.0,
+    "mean_images_per_user": 1.398,
+    "max_images_per_user": 12,
+    "users_with_one_image": 1208,
+    "note": "a median of 1 image/user means the grouped split is close to a per-image split; grouping cannot separate the same PERSON if HaGRID gave them multiple user_ids"
+  },
+  "nearest_neighbour_cosine": {
+    "test_to_train": {
+      "mean": 0.6403,
+      "p50": 0.6447,
+      "p95": 0.8089,
+      "max": 0.8452,
+      "frac_over_0.95": 0.0,
+      "frac_over_0.98": 0.0,
+      "frac_over_0.99": 0.0
+    },
+    "train_to_train_control": {
+      "mean": 0.6319,
+      "p50": 0.6316,
+      "p95": 0.8161,
+      "max": 0.8907,
+      "frac_over_0.95": 0.0,
+      "frac_over_0.98": 0.0,
+      "frac_over_0.99": 0.0
+    },
+    "interpretation": "if test->train similarity looked much higher than the train->train control, test images would be effectively duplicated in training. Compare the two rows."
+  },
+  "most_similar_test_train_pairs": [
+    {
+      "cosine": 0.8452,
+      "test_uuid": "4bc66e65-a6a6-4b07-8bd3-64ca28b1f39e",
+      "test_label": "fist",
+      "test_user": "9ec62d5f37e821dd755d2d8e3a060aaf9a571f9077d60743fa4c75b8f9f9271e",
+      "train_uuid": "0e567d86-d896-4fb9-81ec-d9ca5d89830b",
+      "train_label": "fist",
+      "train_user": "6c772480a4f7ea9b28ae8b4b3eeb3f187ee9ae12f0ed48810487240926f18845",
+      "same_label": true
+    },
+    {
+      "cosine": 0.8447,
+      "test_uuid": "8f6c4e9c-65b6-4178-91c0-146e78b96a47",
+      "test_label": "not_fist",
+      "test_user": "c50a798c5522d8b0966db270a212e62980fb5e57817a04e242c047894bda3116",
+      "train_uuid": "929270e7-b300-4e30-bb72-81b153cde43a",
+      "train_label": "not_fist",
+      "train_user": "65ececfa6345d45f8a7c4e2e1db2094cbb72ef06e5e224e63003e3268585d661",
+      "same_label": true
+    },
+    {
+      "cosine": 0.8428,
+      "test_uuid": "22db6664-0013-450e-907e-096a69ae57fb",
+      "test_label": "fist",
+      "test_user": "30213fc0a756c1e661dcf8d8cf27d0d92db752e680438bc1ed2482c616899f50",
+      "train_uuid": "8e039fdb-b7aa-4429-9d94-608fef6bc8e3",
+      "train_label": "fist",
+      "train_user": "7d2771b2fb2a6b380837cdfb3ee33b60864457f4f3d4368309fa20356fc9911c",
+      "same_label": true
+    },
+    {
+      "cosine": 0.8428,
+      "test_uuid": "96fc373e-6bf5-482c-b730-27a90e61b270",
+      "test_label": "not_fist",
+      "test_user": "bec456a494a305a6198c869e973f7ce881db262db19651f8098b919243bbc7e8",
+      "train_uuid": "11bdb562-e94a-4317-800a-c7220668c7a1",
+      "train_label": "not_fist",
+      "train_user": "6e3a1b4adb23640b2af2c2a67fedc57feb63c8407a6c495a03c1637bcf1db370",
+      "same_label": true
+    },
+    {
+      "cosine": 0.8391,
+      "test_uuid": "c3f08c1c-ba48-48a9-a9a5-36a3ca0ba596",
+      "test_label": "fist",
+      "test_user": "049acba0b4ec8bdaf21e4aa4fd97850617511f3aec5f0602b50b853f20f90bb7",
+      "train_uuid": "1b6e69cd-690c-4bde-8a98-6b89fa6cb794",
+      "train_label": "fist",
+      "train_user": "ba6dcf129ed9b3009079ed95886704cbca8dd8e1d34c86449dd3f4268d22ce83",
+      "same_label": true
+    },
+    {
+      "cosine": 0.8351,
+      "test_uuid": "ca78d4b8-bec4-47b2-a792-ec23ba3c59e3",
+      "test_label": "fist",
+      "test_user": "397e566bbaab4cfec9514a0007dd561b4d2f1c7747422ba1f3938a312eb04f42",
+      "train_uuid": "6955c561-d7d0-425c-973a-0a5466382cd9",
+      "train_label": "fist",
+      "train_user": "63c6a3162fa6ed5b58468f1b604424824eb4ea0467008fae0ef4f7d09bc0f9b3",
+      "same_label": true
+    },
+    {
+      "cosine": 0.8338,
+      "test_uuid": "730b4389-6bf5-4277-ba3a-4520a7c5951b",
+      "test_label": "fist",
+      "test_user": "f62764ae8a5f289e728b40bfc697c5f85e7babeba59eb5ebd7a0709b1c278e49",
+      "train_uuid": "34fdfc26-e6b7-4ea8-8cd2-8160f50aaf69",
+      "train_label": "fist",
+      "train_user": "12da69e35388d21b68c269b6856a1950bf49ea1784f9d7888017c7c46ce0fa1b",
+      "same_label": true
+    },
+    {
+      "cosine": 0.832,
+      "test_uuid": "ea56c009-d96a-4204-9c46-fec94995408d",
+      "test_label": "fist",
+      "test_user": "86638d1e19be4e820c7d37e3d2dfbd6cb914f5de6cb8765d22fac7a0ea0d0125",
+      "train_uuid": "34fdfc26-e6b7-4ea8-8cd2-8160f50aaf69",
+      "train_label": "fist",
+      "train_user": "12da69e35388d21b68c269b6856a1950bf49ea1784f9d7888017c7c46ce0fa1b",
+      "same_label": true
+    },
+    {
+      "cosine": 0.8317,
+      "test_uuid": "b8a1dd5f-2330-45f7-a75d-895d733a98dc",
+      "test_label": "not_fist",
+      "test_user": "5b0b7fdcb8c0b5644141ba7853a114315e91ab549108f83d4ba7c04525d40c08",
+      "train_uuid": "bf572bb7-9828-4fb4-9e81-824b6b406340",
+      "train_label": "not_fist",
+      "train_user": "663832b306f6e07fc94b37145b96f707cb9f7b557a21417c6353a29cdf3431e6",
+      "same_label": true
+    },
+    {
+      "cosine": 0.8273,
+      "test_uuid": "e0d37f08-048a-4434-943c-45ee0ef6d30b",
+      "test_label": "fist",
+      "test_user": "e8f04d01854f5280f74058ae0bab7ecc5cb3b266798d1e21ee1d49b94829a9f2",
+      "train_uuid": "fdfaa4cf-3025-498c-a59c-ef43275b0a5f",
+      "train_label": "fist",
+      "train_user": "0d6da2c87ef8eabeda2dcfee2dc5b5035e878137a91b149c754a59804f3dce32",
+      "same_label": true
+    }
+  ]
+}

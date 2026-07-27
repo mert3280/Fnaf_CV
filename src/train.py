@@ -184,16 +184,21 @@ def main():
     device = "cuda" if torch.cuda.is_available() else "cpu"
     torch.set_num_threads(torch.get_num_threads())
     set_seed(tcfg["seed"])
-    print(f"device={device}  backbone={mcfg['backbone']}  frozen={mcfg['freeze_backbone']}")
+    print(f"device={device}  backbone={mcfg['backbone']}  frozen={mcfg['freeze_backbone']}"
+          f"  head_init={mcfg.get('head_init', 'timm_default')}")
 
     data_cfg = DataConfig.from_yaml(cfg["data_config"])
     data_cfg.loader.batch_size = tcfg["batch_size"]
     data_cfg.loader.num_workers = tcfg["num_workers"]
 
     unfreeze_blocks = mcfg.get("unfreeze_blocks", 0)  # AD-08 Stage B (default 0 = frozen)
+    # head_init defaults to timm's own init, so omitting it reproduces every
+    # previously committed run exactly. `pytorch_linear` is the Week-4 finding
+    # (see src/models/build.py::init_classifier) -- opt in per config.
+    head_init = mcfg.get("head_init", "timm_default")
     model = build_model(
         mcfg["backbone"], mcfg["num_classes"], mcfg["freeze_backbone"], mcfg["pretrained"],
-        unfreeze_blocks=unfreeze_blocks,
+        unfreeze_blocks=unfreeze_blocks, head_init=head_init,
     ).to(device)
     ps = param_summary(model)
     print(f"params: trainable {ps['trainable']:,} / total {ps['total']:,} "

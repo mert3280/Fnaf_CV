@@ -1,16 +1,55 @@
 # Plan v2 — Hands-free FNAF via cursor control
 
-> **Status 2026-07-15:** Steps 1–2 **done** (split verified: 1,494/360/325;
-> binary model trained — **0.9815 test**, [record](../models/palmfist_frozen_mnv3_large/README.md)).
+> **Status 2026-07-26:** Steps 1–2 **done and now tuned** (AD-21 fist-vs-rest is the
+> deployed model; Week-4 tuning + MLflow registry + serving endpoint landed — see the
+> [Week-4 update](#week-4-update-2026-07-26--on-track-tuning--pipeline-done-step-5-still-the-gate)).
 > Steps 3–4 **code-complete and offline-verified** (`src/rt/cursor.py`,
 > `src/control/click_fsm.py`, HUD preview in `webcam_demo`). Step 5 **built,
 > not yet run against the game** (`src/control/play.py` + `input_sim.py`; the
-> in-game registration test and all live tuning are Ted's). Step 6 not started.
+> in-game registration test and all live tuning are Ted's) — **this is the
+> outstanding gate.** Step 6 not started.
 
 **Effective 2026-07-14** (the [AD-17](architecture-and-decisions.md#ad-17--pivot-to-cursor-control-motion-tracked-cursor--binary-click-classifier)
 scope pivot). This replaces the phase plans now archived in
 [../legacy/phases/](../legacy/README.md); the design itself is specified
 in [Strategy 3](strategies/3-cursor-and-click/03-cursor-and-click.md).
+
+## Week-4 update (2026-07-26) — on track; tuning + pipeline done, Step 5 still the gate
+
+**On track, roadmap unchanged.** Week 4 executed the tuning levers Step 2 had been
+holding open and built the orchestration/serving layer around them. **Step 5
+(drive the real game) is still the next build milestone and is still unstarted —
+that has not moved since 2026-07-15, and it remains the project's real risk.**
+
+What landed (full detail: [Week-4 report](../class-related/week4/tuning-orchestration-report.md)):
+
+- **Tuning** ([`src/tune.py`](../../src/tune.py), [`configs/tune_fistvsrest.yaml`](../../configs/tune_fistvsrest.yaml)):
+  a 60-trial TPE search on cached frozen features plus an end-to-end
+  `unfreeze × augmentation` grid, every trial an MLflow run, seed-repeated at the
+  top, test read once at the end. **Tuning target was the *deployed* model
+  (`fistvsrest`, AD-21)** — not Week 3's named candidate (`palmfist`), because
+  AD-21 replaced the negative class after that report; `palmfist` stays as the A/B.
+- **The week's actual finding (AD-22):** the deployed run's *"val still climbing at
+  ep40"* was **timm's 2-class head initialization**, not an epoch shortage —
+  `r = 1/sqrt(out_features)` gives a binary head ±0.707 weights, ±27 logits, CE
+  2.70 at init. Fixing only the init, same recipe and seed: **val 0.9221 → 0.9740**.
+  Hyper-parameter search then added ~1 point on top. `head_init` is an opt-in knob
+  with the old default preserved; **making it the project default is my call
+  (AD-22 is Proposed).**
+- **Orchestration (AD-23):** [`src/pipeline/`](../../src/pipeline/dag.py) — a local
+  task graph with freshness/`cached` skips, retries, upstream-failure propagation,
+  and JSON run records. **Event-triggered (`--if-data-changed`), not scheduled**, and
+  the [pipeline diagram](../class-related/week4/pipeline-diagram.png) is *rendered
+  from the task definitions* so it can't drift.
+- **Deployment (AD-24):** MLflow **Model Registry** + `champion` alias, served by
+  [`src/serve/app.py`](../../src/serve/app.py) over a pyfunc artifact that carries
+  its own preprocessing; ONNX exported with a torch-parity check (AD-11 satisfied).
+
+**What this does NOT change:** every number above is still offline, on HaGRID's
+annotated crops. The live/arm's-length gap is untouched and unmeasured, so the
+Step-2 follow-up (self-capture fine-tune at cursor distances) and Step 5's live
+tuning are exactly where they were. The tuned model is a better starting point for
+that work, not a substitute for it.
 
 ## Week-3 update (2026-07-19) — on track; tracking consolidated, tuning next
 
