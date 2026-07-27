@@ -142,10 +142,8 @@ Why this exact shape (AD-20). Values below are the code defaults in
 Ted's live-tuning calls, not fixed constants:
 
 - **Confidence gate** (`--fsm-conf`, default **0.70**). A frame only counts if
-  `confidence ≥ 0.70`. Below it, the frame is *ambiguous* — it neither confirms
-  nor resets.
-- **K-frame confirm** (`--fsm-k`, default **3**). Need 3 consecutive confident
-  frames of a pose to accept it, so **one noisy frame can never click**.
+  `confidence ≥ 0.70`. Below it, the frame is *ambiguous* — it neither confirms nor resets. but in 3.2.1 im doing .8 confidence as a min threshold 
+- **K-frame confirm** (`--fsm-k`, default **3**). Need 3 consecutive confident frames of a pose to accept it, so **one noisy frame can never click**. In 3.2.1, only 2 frames are required.
 - **Re-arm on no-click only.** After firing, the FSM won't fire again until it
   has *seen* 3 confident no-click frames. Double-fires are **structurally
   impossible**, not merely debounced.
