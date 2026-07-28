@@ -1,0 +1,42 @@
+{
+  "startedAt": "2026-07-22T20:45:21.638Z",
+  "finishedAt": "2026-07-22T20:48:10.847Z",
+  "screen": {
+    "w": 1707,
+    "h": 898
+  },
+  "ob1": {
+    "timeMs": 27251,
+    "totalMs": 41811,
+    "splitsMs": [
+      14560,
+      7754,
+      6705,
+      7446,
+      5345
+    ]
+  },
+  "ob2": {
+    "timeMs": 16389,
+    "clicks": 7
+  },
+  "ob3": {
+    "timeMs": 28005,
+    "accuracy": 81.2,
+    "meanDevPx": 13.1,
+    "coverage": 0.983
+  },
+  "survey": {
+    "q1": 2,
+    "q2": 5,
+    "q3": 3,
+    "q4": 4,
+    "q5": 3
+  },
+  "meta": {
+    "model": "palmfist_frozen_mnv3_large",
+    "checkpoint": "models/palmfist_frozen_mnv3_large/best.pt",
+    "strategy": "3.0 \u00b7 palm/fist",
+    "device": "cpu"
+  }
+}

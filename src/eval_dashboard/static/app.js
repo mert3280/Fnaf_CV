@@ -33,9 +33,58 @@ document.addEventListener("mousedown", () => {
   setTimeout(() => handCursor.classList.remove("click"), 140);
 });
 
+/* ================= MODEL PICKER ================= */
+// Which checkpoint the next run loads; POSTed to /api/start. Populated from
+// /api/models (models/*/best.pt on disk, enriched with DOCS/models test acc).
+let selectedModel = null;
+let modelOpts = [];
+
+async function loadModels() {
+  let data;
+  try { data = await (await fetch("/api/models")).json(); }
+  catch (_) { return; }                      // server not up
+  modelOpts = data.models || [];
+  if (!modelOpts.length) { renderModelCompare(modelOpts); return; }
+  selectedModel = data.current || modelOpts[0].path;
+  renderModelCompare(modelOpts);             // Overview tab's metrics table
+  const sel = $("modelSelect");
+  sel.innerHTML = modelOpts.map((m) =>
+    `<option value="${m.path}">${m.id}${m.test_acc ? ` — ${(+m.test_acc * 100).toFixed(1)}% test acc` : ""}</option>`
+  ).join("");
+  sel.value = selectedModel;
+  $("modelPicker").hidden = false;
+  updateModelBlurb();
+  updateStrategyVisibility();
+}
+
+function updateModelBlurb() {
+  const m = modelOpts.find((x) => x.path === selectedModel);
+  $("modelBlurb").textContent = m
+    ? [m.classes && `${m.classes} classes`, m.crop_mode && `${m.crop_mode} crop`,
+       m.test_acc && `${(+m.test_acc * 100).toFixed(1)}% test acc`].filter(Boolean).join(" · ")
+    : "";
+}
+
+// Only fist-vs-rest checkpoints support the 3.2/3.2.1 click-FSM presets (AD-21).
+function updateStrategyVisibility() {
+  const m = modelOpts.find((x) => x.path === selectedModel);
+  $("strategyPicker").hidden = !(m && m.fistvsrest && strategyOpts.length);
+}
+
+$("modelSelect").addEventListener("change", (e) => {
+  selectedModel = e.target.value;
+  updateModelBlurb();
+  updateStrategyVisibility();
+  renderModelCompare(modelOpts);
+});
+
+// Once the tracker is running the checkpoint is loaded — lock the pick.
+function lockModelPicker() { $("modelSelect").disabled = true; }
+
 /* ================= STRATEGY PICKER (fist-vs-rest: 3.2 vs 3.2.1) ================= */
-// Only shown when the server loaded a fist-vs-rest checkpoint. Picks which
-// click-FSM preset (conf + K) the run uses; POSTed to /api/start.
+// Picks which click-FSM preset (conf + K) the run uses; POSTed to /api/start.
+// Visibility is gated by the selected model (updateStrategyVisibility above),
+// not by the server default, so switching models updates it live.
 let selectedStrategy = null;
 let strategyOpts = [];
 
@@ -43,7 +92,7 @@ async function loadStrategies() {
   let data;
   try { data = await (await fetch("/api/strategies")).json(); }
   catch (_) { return; }                      // server not up / no tracker
-  if (!data.applicable || !(data.options || []).length) return;
+  if (!(data.options || []).length) return;
   strategyOpts = data.options;
   selectedStrategy = data.current || data.options[0].id;
   const box = $("strategyOptions");
@@ -57,8 +106,8 @@ async function loadStrategies() {
     b.addEventListener("click", () => selectStrategy(o.id));
     box.appendChild(b);
   });
-  $("strategyPicker").hidden = false;
   updateStrategyBlurb();
+  updateStrategyVisibility();
 }
 
 function selectStrategy(id) {
@@ -89,9 +138,10 @@ $("startTrackerBtn").addEventListener("click", async () => {
     const j = await (await fetch("/api/start", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ strategy: selectedStrategy }),
+      body: JSON.stringify({ checkpoint: selectedModel, strategy: selectedStrategy }),
     })).json();
     if (!j.ok) throw new Error(j.error || "could not start tracker");
+    lockModelPicker();
     lockStrategyPicker();
   } catch (e) {
     trackerStarting = false;
@@ -105,19 +155,21 @@ $("startBtn").addEventListener("click", () => {
   startOb1();
 });
 
-/* ================= WELCOME TABS: Start / Overview ================= */
+/* ================= WELCOME TABS: Start / Overview / Help ================= */
 function selectTab(name) {
-  const isOverview = name === "overview";
-  $("tabStart").classList.toggle("active", !isOverview);
-  $("tabOverview").classList.toggle("active", isOverview);
-  $("panelStart").classList.toggle("active", !isOverview);
-  $("panelOverview").classList.toggle("active", isOverview);
+  $("tabStart").classList.toggle("active", name === "start");
+  $("tabOverview").classList.toggle("active", name === "overview");
+  $("tabHelp").classList.toggle("active", name === "help");
+  $("panelStart").classList.toggle("active", name === "start");
+  $("panelOverview").classList.toggle("active", name === "overview");
+  $("panelHelp").classList.toggle("active", name === "help");
   // charts + the full metric table need a wider card than the start panel
-  $("screen-welcome").querySelector(".card").classList.toggle("card-xw", isOverview);
-  if (isOverview) loadOverview();
+  $("screen-welcome").querySelector(".card").classList.toggle("card-xw", name !== "start");
+  if (name === "overview") loadOverview();
 }
 $("tabStart").addEventListener("click", () => selectTab("start"));
 $("tabOverview").addEventListener("click", () => selectTab("overview"));
+$("tabHelp").addEventListener("click", () => selectTab("help"));
 
 /* ---------- Overview: pull past runs and render scores ---------- */
 const secs = (ms) => (typeof ms === "number" ? (ms / 1000).toFixed(1) + "s" : "—");
@@ -142,6 +194,29 @@ function dateVal(r) {
 function ovTile(val, label, sub) {
   return `<div class="ov-tile"><b>${val}</b><span>${label}</span>` +
          (sub ? `<small>${sub}</small>` : "") + `</div>`;
+}
+
+/* ---------- Overview: offline model-metrics table (from /api/models) ---------- */
+function renderModelCompare(models) {
+  const wrap = $("modelCompare");
+  if (!models.length) { wrap.hidden = true; return; }
+  wrap.hidden = false;
+  const best = models.reduce((a, b) =>
+    (+b.test_acc || -1) > (+(a && a.test_acc) || -1) ? b : a, null);
+  const rows = models.map((m) => {
+    const acc = m.test_acc ? (+m.test_acc * 100).toFixed(1) + "%" : "—";
+    const isBest = best && m.id === best.id && m.test_acc;
+    return `<tr${m.path === selectedModel ? ' class="mc-current"' : ""}>` +
+      `<td>${m.id}${m.path === selectedModel ? ' <span class="mc-tag">selected</span>' : ""}</td>` +
+      `<td>${m.classes || "—"}</td>` +
+      `<td>${m.crop_mode || "—"}</td>` +
+      `<td class="num">${acc}${isBest ? ' <span class="mc-tag mc-tag-best">best</span>' : ""}</td>` +
+      `</tr>`;
+  }).join("");
+  $("modelCompareTable").innerHTML =
+    `<table class="ov-table mc-table"><thead><tr>` +
+    `<th>Model</th><th>Classes</th><th>Crop</th><th class="num">Test acc</th>` +
+    `</tr></thead><tbody>${rows}</tbody></table>`;
 }
 
 /* ---------- Overview: filtering + sorting ----------
@@ -717,4 +792,4 @@ async function pollStatus() {
 }
 setInterval(pollStatus, 700);
 pollStatus();
-loadStrategies();
+loadModels().then(loadStrategies);

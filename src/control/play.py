@@ -26,15 +26,16 @@ defaults are the Strategy-3 starting points.
 from __future__ import annotations
 
 import argparse
+import sys
 import time
 
 import cv2
-import numpy as np
-import torch
 
 from src.control.click_fsm import ClickFSM
 from src.control.input_sim import InputSim, screen_size
 from src.control.strategies import FSM_PRESETS, resolve_fsm
+from src.rt.backends import make_runner
+from src.rt.capture import open_camera
 from src.rt.cursor import CursorMapper, hand_anchor_norm, palm_span
 from src.rt.model_loader import load_checkpoint
 from src.rt.preprocess import Preprocessor
@@ -83,12 +84,45 @@ def parse_args() -> argparse.Namespace:
     ap.add_argument("--fsm-grace", type=int, default=10,
                     help="ambiguous frames tolerated before disarm (3.1.1)")
     ap.add_argument("--cooldown", type=float, default=0.30, help="min seconds between clicks")
+    # runtime / latency (Strategy 3.2.3) -- these change how fast the loop runs
+    # and how the click is delivered, NOT what the model or the FSM decide.
+    ap.add_argument("--backend", choices=("auto", "onnx", "torch"), default="auto",
+                    help="stage-2 inference backend: onnx is 3-4x faster on this CPU and "
+                         "parity-checked at load; torch reverts (default: auto)")
+    ap.add_argument("--torch-threads", type=int, default=4,
+                    help="torch intra-op threads (measured: 4 beats the 16-thread default)")
+    ap.add_argument("--no-threaded-capture", action="store_true",
+                    help="grab frames synchronously (pre-3.2.3 behaviour: same FPS, but "
+                         "~67 ms staler frames -- the driver serves from a 2-frame backlog)")
+    ap.add_argument("--click-hold", type=float, default=0.06,
+                    help="seconds to hold the mouse button down per click; 0 = the old "
+                         "single-SendInput pulse a DirectX game can miss")
+    ap.add_argument("--hud-every", type=int, default=1,
+                    help="render the preview every Nth frame (2 saves a few ms)")
     return ap.parse_args()
 
 
-@torch.no_grad()
-def predict(model, tensor, device) -> np.ndarray:
-    return torch.softmax(model(tensor.to(device)), dim=1)[0].cpu().numpy()
+def warn_if_on_battery() -> None:
+    """On this laptop, battery power drops the CPU to its 1.4 GHz base clock and
+    costs ~2.1x on every stage -- a bigger term than anything Strategy 3.2.3
+    changed (9-11 FPS on battery vs. 28 on AC). Cheap to check, easy to forget."""
+    if sys.platform != "win32":
+        return
+    try:
+        import ctypes
+
+        class SPS(ctypes.Structure):
+            _fields_ = [("ACLineStatus", ctypes.c_byte), ("BatteryFlag", ctypes.c_byte),
+                        ("BatteryLifePercent", ctypes.c_byte), ("SystemStatusFlag", ctypes.c_byte),
+                        ("BatteryLifeTime", ctypes.c_ulong), ("BatteryFullLifeTime", ctypes.c_ulong)]
+
+        st = SPS()
+        ctypes.windll.kernel32.GetSystemPowerStatus(ctypes.byref(st))
+        if st.ACLineStatus == 0:
+            print("[warn] running ON BATTERY -- the CPU drops to its base clock and the "
+                  "loop runs at roughly half speed (3.2.3). Plug in for the live test.")
+    except Exception:  # never let a diagnostic break the loop
+        pass
 
 
 def hook_kill_switch(sim: InputSim) -> bool:
@@ -104,7 +138,8 @@ def hook_kill_switch(sim: InputSim) -> bool:
     return True
 
 
-def draw_hud(frame, mapper, hand_box, cursor_px, screen, label, conf, fsm, sim, fps, clicked):
+def draw_hud(frame, mapper, hand_box, cursor_px, screen, label, conf, fsm, sim, fps, clicked,
+             dropped=0, backend=""):
     h, w = frame.shape[:2]
     bx1, by1, bx2, by2 = mapper.box_px(w, h)
     cv2.rectangle(frame, (bx1, by1), (bx2, by2), (90, 90, 90), 1)  # control box
@@ -124,7 +159,10 @@ def draw_hud(frame, mapper, hand_box, cursor_px, screen, label, conf, fsm, sim, 
     cv2.putText(frame, top, (10, 24), FONT, 0.6, (0, 230, 0) if sim.enabled else (0, 0, 255),
                 2, cv2.LINE_AA)
     cv2.putText(frame, fsm.describe(), (10, 48), FONT, 0.5, (200, 200, 200), 1, cv2.LINE_AA)
-    foot = f"{fps:4.1f}FPS  cursor={cursor_px}  clicks={sim.clicks}  ESC=kill  q=quit"
+    # `drop` = frames the camera produced that the loop was too slow to take:
+    # a direct readout of "the pipeline is behind the camera" (3.2.3).
+    foot = (f"{fps:4.1f}FPS {backend} drop{dropped}  cursor={cursor_px}  "
+            f"clicks={sim.clicks}  ESC=kill  q=quit")
     cv2.putText(frame, foot, (10, h - 12), FONT, 0.45, (255, 255, 255), 1, cv2.LINE_AA)
     if clicked:
         cv2.putText(frame, "CLICK", (w // 2 - 40, 40), FONT, 1.0, (0, 0, 255), 3, cv2.LINE_AA)
@@ -149,6 +187,9 @@ def main() -> None:
         print("[warn] full_frame checkpoint: classifier gets the whole frame; the "
               "detector still runs for the cursor.")
     pre = Preprocessor(lm.size, lm.mean, lm.std)
+    # 3.2.3: same tensor in, same probabilities out -- only faster. The ONNX
+    # path is parity-checked against torch at load or it isn't used.
+    predict, backend = make_runner(lm, args.backend, args.device, args.torch_threads)
 
     # The cursor NEEDS the detector (unlike the demo there is no ROI fallback).
     from src.rt.detector import DEFAULT_MODEL, HandDetector
@@ -172,7 +213,7 @@ def main() -> None:
     fsm = ClickFSM(k=fsm_k, conf_threshold=fsm_conf,
                    cooldown_s=args.cooldown, grace=args.fsm_grace,
                    palm_label=noclick_label, fist_label="fist")
-    sim = InputSim(dry_run=args.dry_run)
+    sim = InputSim(dry_run=args.dry_run, hold_s=args.click_hold)
     hook_kill_switch(sim)
 
     box_txt = (f"box adaptive gain={args.box_gain}" if args.box_mode == "adaptive"
@@ -182,12 +223,14 @@ def main() -> None:
           f"alpha {args.cursor_alpha}  {strat_txt}K={fsm_k}  conf>={fsm_conf}  "
           f"grace {args.fsm_grace}  cooldown {args.cooldown}s  "
           f"{'DRY-RUN' if args.dry_run else 'LIVE'}")
+    warn_if_on_battery()
+    print(f"runtime: backend {backend}  "
+          f"capture {'threaded' if not args.no_threaded_capture else 'sync'}  "
+          f"click-hold {args.click_hold * 1000:.0f} ms")
     if not args.dry_run:
         print("Focus the FNAF window. ESC = kill-switch.")
 
-    cap = cv2.VideoCapture(args.camera, cv2.CAP_DSHOW)
-    if not cap.isOpened():
-        raise SystemExit(f"could not open camera {args.camera}")
+    cap = open_camera(args.camera, threaded=not args.no_threaded_capture)
     win = "FNAF hands-free control"
     if not args.no_preview:
         cv2.namedWindow(win, cv2.WINDOW_NORMAL)
@@ -195,12 +238,14 @@ def main() -> None:
     mirror = not args.no_mirror
     last, fps = time.time(), 0.0
     click_flash = 0
+    frames = 0
 
     try:
         while sim.enabled:
             ok, frame = cap.read()
             if not ok:
                 print("frame grab failed"); break
+            frames += 1
             if mirror:
                 frame = cv2.flip(frame, 1)
             h, w = frame.shape[:2]
@@ -213,12 +258,15 @@ def main() -> None:
                                           hand_scale=palm_span(hb.landmarks_norm))
                 model_in = detector.crop(frame, hb) if lm.crop_mode == "bbox" else frame
                 if model_in.size > 0:
-                    probs = predict(lm.model, pre(model_in), args.device)
+                    probs = predict(pre(model_in))
                     idx = int(probs.argmax())
                     label, conf = lm.classes[idx], float(probs[idx])
             else:
                 cursor_px = mapper.update(None)  # freeze
 
+            # Release a held click whose hold has expired (3.2.3), before the
+            # move: the cursor stays frozen for exactly the press's duration.
+            sim.tick()
             if cursor_px is not None:
                 sim.move_to(*cursor_px)
             if fsm.update(label, conf):
@@ -230,10 +278,11 @@ def main() -> None:
             fps = 0.9 * fps + 0.1 * (1.0 / max(now - last, 1e-6))
             last = now
 
-            if not args.no_preview:
+            if not args.no_preview and frames % max(1, args.hud_every) == 0:
                 click_flash = max(0, click_flash - 1)
                 draw_hud(frame, mapper, hand_box, cursor_px, screen,
-                         label, conf, fsm, sim, fps, clicked or click_flash > 0)
+                         label, conf, fsm, sim, fps, clicked or click_flash > 0,
+                         dropped=cap.dropped, backend=backend)
                 cv2.imshow(win, frame)
                 key = cv2.waitKey(1) & 0xFF
                 if key in (ord("q"), 27):

@@ -55,6 +55,11 @@ class TrackerConfig:
     fsm_conf: float = 0.70
     fsm_grace: int = 10
     cooldown: float = 0.30
+    # runtime / latency (Strategy 3.2.3) -- mirrors src.control.play's flags
+    backend: str = "auto"
+    torch_threads: int = 4
+    threaded_capture: bool = True
+    click_hold: float = 0.06
 
 
 @dataclass
@@ -123,10 +128,11 @@ class HandTracker:
         # a camera / torch / mediapipe installed.
         try:
             import cv2
-            import torch
 
             from src.control.click_fsm import ClickFSM
             from src.control.input_sim import InputSim, screen_size
+            from src.rt.backends import make_runner
+            from src.rt.capture import open_camera
             from src.rt.cursor import CursorMapper, hand_anchor_norm, palm_span
             from src.rt.detector import DEFAULT_MODEL, HandDetector
             from src.rt.model_loader import load_checkpoint
@@ -145,6 +151,9 @@ class HandTracker:
                 )
             noclick_label = next(c for c in lm.classes if c != "fist")
             pre = Preprocessor(lm.size, lm.mean, lm.std)
+            # 3.2.3: same tensor in, same probabilities out -- only faster. The
+            # ONNX path is parity-checked against torch at load or it isn't used.
+            predict, backend = make_runner(lm, cfg.backend, cfg.device, cfg.torch_threads)
             detector = HandDetector(
                 cfg.hand_model or DEFAULT_MODEL, pad=cfg.pad,
                 min_detection_confidence=cfg.detect_confidence,
@@ -162,22 +171,21 @@ class HandTracker:
             fsm = ClickFSM(k=cfg.fsm_k, conf_threshold=cfg.fsm_conf,
                            cooldown_s=cfg.cooldown, grace=cfg.fsm_grace,
                            palm_label=noclick_label, fist_label="fist")
-            self._sim = InputSim(dry_run=cfg.dry_run)
+            self._sim = InputSim(dry_run=cfg.dry_run, hold_s=cfg.click_hold)
             self._ensure_kill_hook()
 
-            cap = cv2.VideoCapture(cfg.camera, cv2.CAP_DSHOW)
-            if not cap.isOpened():
-                raise RuntimeError(f"could not open camera {cfg.camera}")
+            try:
+                cap = open_camera(cfg.camera, threaded=cfg.threaded_capture)
+            except SystemExit as e:  # open_camera raises this on a CLI; catch it here
+                raise RuntimeError(str(e)) from e
         except Exception as e:
             self._set(error=f"tracker init failed: {type(e).__name__}: {e}")
             return
 
         self._set(running=True, input_enabled=True, error=None)
-
-        @torch.no_grad()
-        def predict(model_in):
-            probs = torch.softmax(lm.model(pre(model_in).to(cfg.device)), dim=1)[0]
-            return probs.cpu().numpy()
+        print(f"[tracker] runtime: backend {backend}  "
+              f"capture {'threaded' if cfg.threaded_capture else 'sync'}  "
+              f"click-hold {cfg.click_hold * 1000:.0f} ms")
 
         last, fps = time.time(), 0.0
         try:
@@ -199,12 +207,15 @@ class HandTracker:
                     )
                     model_in = detector.crop(frame, hb) if lm.crop_mode == "bbox" else frame
                     if model_in.size > 0:
-                        probs = predict(model_in)
+                        probs = predict(pre(model_in))
                         idx = int(probs.argmax())
                         label, conf = lm.classes[idx], float(probs[idx])
                 else:
                     cursor_px = mapper.update(None)  # freeze on dropout
 
+                # Release a held click whose hold has expired (3.2.3), before the
+                # move: the cursor stays frozen for exactly the press's duration.
+                self._sim.tick()
                 if cursor_px is not None:
                     self._sim.move_to(*cursor_px)
                 if fsm.update(label, conf):

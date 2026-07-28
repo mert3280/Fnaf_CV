@@ -28,6 +28,7 @@ from pathlib import Path
 from flask import Flask, jsonify, request, send_from_directory
 
 from src.control.strategies import DEFAULT_STRATEGY, FSM_PRESETS
+from src.eval_dashboard.model_registry import list_models
 from src.eval_dashboard.results import save_results, summarize_run
 from src.eval_dashboard.tracker import HandTracker, TrackerConfig
 
@@ -39,6 +40,9 @@ _results_dir = "eval_results"
 _run_meta: dict = {}                      # model/strategy stamped onto each saved run
 _strategy_applicable = False             # do the 3.2 / 3.2.1 presets fit this checkpoint?
 _current_strategy: str | None = None     # which preset the next run will use
+_available_models: list = []             # checkpoints on disk + their DOCS metadata
+_current_checkpoint: str | None = None   # checkpoint the next run will start with
+_device = "cpu"
 
 
 def _derive_meta(checkpoint: str, device: str, tracker: bool) -> dict:
@@ -103,24 +107,44 @@ def api_strategies():
     )
 
 
+@app.route("/api/models")
+def api_models():
+    """Checkpoints on disk (+ their DOCS/models/README.md metadata), and which
+    one the next run will start with -- feeds the Start-tab model picker and
+    the Overview tab's model-metrics panel."""
+    return jsonify(models=_available_models, current=_current_checkpoint)
+
+
 @app.route("/api/start", methods=["POST"])
 def api_start():
     """Arm the hand tracker from the page (opens the camera + loads the model).
-    The body may carry `{"strategy": "3.2.1"}` to pick the FSM preset; it's
-    applied to the tracker config *before* the loop reads it."""
-    global _current_strategy
+    The body may carry `{"checkpoint": "models/.../best.pt"}` to switch which
+    checkpoint this run loads, and `{"strategy": "3.2.1"}` to pick the FSM
+    preset -- both are applied to the tracker config *before* the loop starts."""
+    global _current_strategy, _current_checkpoint, _run_meta, _strategy_applicable
     if _tracker is None:
         return jsonify(ok=False, error="server started with --no-tracker"), 400
+    if _tracker.status().running:
+        return jsonify(ok=False, error="tracker already running"), 400
     data = request.get_json(force=True, silent=True) or {}
+
+    cp = data.get("checkpoint")
+    if cp and cp != _current_checkpoint and any(m["path"] == cp for m in _available_models):
+        _current_checkpoint = cp
+        _tracker.cfg.checkpoint = cp              # cfg is read when the thread starts below
+        _run_meta = _derive_meta(cp, _device, tracker=True)
+        _strategy_applicable = _strategy_fits(cp, tracker=True)
+        _current_strategy = DEFAULT_STRATEGY if _strategy_applicable else None
+
     sid = data.get("strategy")
     if _strategy_applicable and sid in FSM_PRESETS:
         preset = FSM_PRESETS[sid]
-        _tracker.cfg.fsm_conf = preset.fsm_conf   # cfg is read when the thread starts below
+        _tracker.cfg.fsm_conf = preset.fsm_conf
         _tracker.cfg.fsm_k = preset.fsm_k
         _current_strategy = sid
-        _run_meta["strategy"] = preset.label      # stamp what this run actually ran
+        _run_meta["strategy"] = preset.label       # stamp what this run actually ran
     _tracker.start()
-    return jsonify(ok=True, strategy=_current_strategy)
+    return jsonify(ok=True, strategy=_current_strategy, checkpoint=_current_checkpoint)
 
 
 @app.route("/api/finish", methods=["POST"])
@@ -192,13 +216,29 @@ def parse_args() -> argparse.Namespace:
     ap.add_argument("--fsm-conf", type=float, default=0.70)
     ap.add_argument("--fsm-grace", type=int, default=10)
     ap.add_argument("--cooldown", type=float, default=0.30)
+    # runtime / latency (Strategy 3.2.3) -- same flags & defaults as src.control.play
+    ap.add_argument("--backend", choices=("auto", "onnx", "torch"), default="auto",
+                    help="stage-2 inference backend: onnx is 3-4x faster on this CPU and "
+                         "parity-checked at load; torch reverts (default: auto)")
+    ap.add_argument("--torch-threads", type=int, default=4,
+                    help="torch intra-op threads (measured: 4 beats the 16-thread default)")
+    ap.add_argument("--no-threaded-capture", action="store_true",
+                    help="grab frames synchronously (pre-3.2.3 behaviour: same FPS, but "
+                         "~67 ms staler frames)")
+    ap.add_argument("--click-hold", type=float, default=0.06,
+                    help="seconds to hold the mouse button down per click; 0 = the old "
+                         "single-SendInput pulse a DirectX game can miss")
     return ap.parse_args()
 
 
 def main() -> None:
     global _tracker, _results_dir, _run_meta, _strategy_applicable, _current_strategy
+    global _available_models, _current_checkpoint, _device
     args = parse_args()
     _results_dir = args.results_dir
+    _device = args.device
+    _current_checkpoint = args.checkpoint
+    _available_models = list_models()
     _run_meta = _derive_meta(args.checkpoint, args.device, tracker=not args.no_tracker)
     _strategy_applicable = _strategy_fits(args.checkpoint, tracker=not args.no_tracker)
     _current_strategy = (args.strategy or DEFAULT_STRATEGY) if _strategy_applicable else None
@@ -215,6 +255,8 @@ def main() -> None:
             box_w=args.box_w, box_h=args.box_h, cursor_alpha=args.cursor_alpha,
             deadzone=args.deadzone, fsm_k=args.fsm_k, fsm_conf=args.fsm_conf,
             fsm_grace=args.fsm_grace, cooldown=args.cooldown,
+            backend=args.backend, torch_threads=args.torch_threads,
+            threaded_capture=not args.no_threaded_capture, click_hold=args.click_hold,
         )
         if _current_strategy:   # default preset for a fist-vs-rest checkpoint
             preset = FSM_PRESETS[_current_strategy]

@@ -51,6 +51,8 @@ backbone + classes + input spec) and writes an honest metrics report to
 | File | Role |
 |---|---|
 | [detector.py](../../src/rt/detector.py) | Stage 1: MediaPipe Hand Landmarker finds the hand, pads/clamps its box with the **same geometry as training** to produce the crop. |
+| [capture.py](../../src/rt/capture.py) | 3.2.3: background frame grabber keeping only the **newest** frame. Removes the ~67 ms of camera-backlog lag a synchronous `read()` serves from; `dropped` reports how far behind the camera the loop is. |
+| [backends.py](../../src/rt/backends.py) | 3.2.3: stage-2 inference backend — the already-exported `model.onnx` (**~3.3× faster** than PyTorch on this CPU) or PyTorch, chosen at load and **parity-checked** before use. Also caps torch's thread pool, which otherwise starves MediaPipe. |
 | [preprocess.py](../../src/rt/preprocess.py) | Runtime preprocessing — calls the same `build_transforms(train=False)` so it can't drift from training. `RoiCropper` for full-frame models. |
 | [cursor.py](../../src/rt/cursor.py) | Stage 1→mouse position (AD-19): palm-anchor → control box → clamp → EMA → dead-zone → screen (x,y). Adaptive box scales with hand size for distance-invariant gain. |
 | [model_loader.py](../../src/rt/model_loader.py) | Loads any self-describing `best.pt` into a ready classifier — swap models by pointing at a different file. |
@@ -63,7 +65,7 @@ backbone + classes + input spec) and writes an honest metrics report to
 | File | Role |
 |---|---|
 | [click_fsm.py](../../src/control/click_fsm.py) | Stage 2→button: debounced, edge-triggered click FSM (AD-20). One click per palm→fist transition; re-arm requires palm; grace window tolerates brief ambiguous frames. |
-| [input_sim.py](../../src/control/input_sim.py) | `pydirectinput` SendInput wrapper: `move_to`, `click`, `kill`. DPI-aware, PAUSE=0, failsafe off, dry-run mode. |
+| [input_sim.py](../../src/control/input_sim.py) | `pydirectinput` SendInput wrapper: `move_to`, `click`, `tick`, `kill`. DPI-aware, PAUSE=0, failsafe off, dry-run mode. 3.2.3: a click is `mouseDown` → **~60 ms hold** → `mouseUp` (a 0 ms pulse is invisible to a 60 Hz DirectX game), released by `tick()` so the loop never blocks; cursor frozen while pressed; `kill()` releases first. |
 | [strategies.py](../../src/control/strategies.py) | Named FSM tuning presets (3.2: conf≥0.70/K=3; 3.2.1: conf≥0.80/K=2). Single source of truth shared by play + dashboard. |
 | [play.py](../../src/control/play.py) | **The full Strategy-3 control loop** composing everything: webcam→detect→cursor+CNN→FSM→click. ESC global kill-switch; `--dry-run`. |
 | [keyboard_mock_controller.py](../../src/control/keyboard_mock_controller.py) | Day-1 de-risk: drive FNAF with keyboard-mocked gestures through the same `Controller` entry point, before any ML. Kept as record + skeleton. |
@@ -72,9 +74,11 @@ backbone + classes + input spec) and writes an honest metrics report to
 
 | File | Role |
 |---|---|
-| [server.py](../../src/eval_dashboard/server.py) | Web app serving an obstacle course (precision / rapid-click / tracer); owns the tracker driving real cursor+clicks. `/api/finish` (kill-switch), `/api/results`. |
+| [server.py](../../src/eval_dashboard/server.py) | Web app serving an obstacle course (precision / rapid-click / tracer); owns the tracker driving real cursor+clicks. `/api/models` + `/api/strategies` back the Start tab's checkpoint/click-FSM pickers; `/api/finish` (kill-switch), `/api/results`. |
+| [model_registry.py](../../src/eval_dashboard/model_registry.py) | Discovers `models/*/best.pt` on disk and enriches each with the test-acc/classes/crop-mode row parsed out of [DOCS/models/README.md](../../models/README.md), so the dashboard's model picker and Overview metrics table can't drift from that doc. |
 | [tracker.py](../../src/eval_dashboard/tracker.py) | `play.py`'s per-frame pipeline lifted into a start/stop background thread the server owns. `stop()` is the kill-switch. |
 | [results.py](../../src/eval_dashboard/results.py) | Persists one run (obstacle timings + 5-question survey) to `.docx` (or `.txt` fallback) plus a `.json` sibling. |
+| [static/](../../src/eval_dashboard/static/) | Start tab (model + click-FSM pickers, obstacle course), Overview tab (offline model-metrics table + filterable/sortable/chartable trial history), Help tab (in-app usage instructions). |
 
 ## `src/tune.py` — hyper-parameter tuning (Week 4)
 Two-arm search, every trial an MLflow run. **Arm A** trains the head on *cached*
@@ -110,7 +114,11 @@ once (AD-10), and registers the model.
 `mlflow_log_runs.py` / `mlflow_export_comparison.py` (Week 3) · `mlflow_export_tuning.py`
 (exports the tuning experiment to CSV + figures) · `capture_endpoint_transcript.py`
 (boots the endpoint, records real requests/responses + latency) ·
-`render_pipeline_diagram.py` (renders the flowchart **from** `src/pipeline/tasks.py`).
+`render_pipeline_diagram.py` (renders the flowchart **from** `src/pipeline/tasks.py`) ·
+`audit_split_leakage.py` (attacks the Week-4 perfect test score) ·
+`bench_pipeline.py` (times the live loop's real stages per backend/capture config —
+the evidence behind Strategy 3.2.3; each config runs in its own process so thread
+pools can't contaminate the next).
 
 ## Configs (`configs/*.yaml`)
 `data.yaml` (pipeline defaults) plus per-experiment training configs: `baseline`,

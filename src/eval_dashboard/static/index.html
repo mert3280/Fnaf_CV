@@ -21,6 +21,7 @@
       <div class="tabs" role="tablist">
         <button id="tabStart" class="tab active" role="tab">Start</button>
         <button id="tabOverview" class="tab" role="tab">Overview</button>
+        <button id="tabHelp" class="tab" role="tab">Help</button>
       </div>
 
       <!-- --- Start tab: run the course --- -->
@@ -35,6 +36,12 @@
         </ol>
         <p class="hint">Tip: press <kbd>F11</kbd> for fullscreen so the cursor reaches every corner.
           Make a <b>fist</b> to click, open <b>palm</b> to release.</p>
+        <!-- pick which checkpoint this run loads, before the tracker starts -->
+        <div id="modelPicker" class="model-picker" hidden>
+          <div class="sp-label">Model</div>
+          <select id="modelSelect" class="model-select"><!-- injected --></select>
+          <p id="modelBlurb" class="hint sp-blurb"></p>
+        </div>
         <!-- fist-vs-rest only: pick the click-FSM strategy before starting -->
         <div id="strategyPicker" class="strategy-picker" hidden>
           <div class="sp-label">Click strategy</div>
@@ -52,6 +59,13 @@
       <div id="panelOverview" class="tab-panel">
         <h1>Previous <span class="accent">trials</span></h1>
         <p class="lead">Scores across past runs, and the model / strategy each used.</p>
+
+        <!-- Offline model metrics (DOCS/models/README.md), for comparing checkpoints
+             even before any live trial has been run against them. -->
+        <div id="modelCompare" class="model-compare" hidden>
+          <div class="mc-head">Model metrics <span class="hint mc-sub">(offline test accuracy, from each checkpoint's writeup)</span></div>
+          <div id="modelCompareTable" class="mc-table-wrap"></div>
+        </div>
 
         <!-- Filter + sort + search controls (metric selects/options injected in JS).
              Everything below this bar — tiles, charts, table — shows the same slice. -->
@@ -123,6 +137,56 @@
           <table id="ovTable" class="ov-table"><!-- per-trial rows injected here --></table>
         </div>
         <p id="ovEmpty" class="hint" hidden>No trials recorded yet — run the course to see results here.</p>
+      </div>
+
+      <!-- --- Help tab: how to use this page --- -->
+      <div id="panelHelp" class="tab-panel">
+        <h1>How to <span class="accent">use this</span></h1>
+
+        <h2 class="help-h2">Controls</h2>
+        <ul class="help-list">
+          <li>Move your hand in front of the camera — the cursor follows it.</li>
+          <li><b>Open palm</b> = no click. <b>Closed fist</b> = click.</li>
+          <li><kbd>ESC</kbd> is the kill-switch: it instantly stops all simulated
+            input, from anywhere, even if the browser isn't focused.</li>
+        </ul>
+
+        <h2 class="help-h2">Running a trial</h2>
+        <ol class="help-list">
+          <li>On the <b>Start</b> tab, optionally pick a different <b>Model</b> —
+            each is a checkpoint under <code>models/</code>; the picker shows its
+            offline test accuracy so you can tell them apart.</li>
+          <li>If the model is a <b>fist-vs-rest</b> checkpoint, a <b>Click strategy</b>
+            picker appears — pick a click-FSM tuning preset (how eagerly a fist
+            commits a click). It locks once the tracker starts.</li>
+          <li>Click <b>1 · Start hand tracker</b> — this opens the camera and loads
+            the model (a few seconds). The status chip (top-left) turns green once
+            your hand is seen.</li>
+          <li>Click <b>2 · Start course</b> and clear the three obstacles: precision
+            clicking, rapid clicks, and a line trace.</li>
+          <li>Hit <b>Finish &amp; Rate</b> — this stops the tracker (kill-switch) so
+            you can answer the 5-question survey with the normal mouse.</li>
+          <li>Submitting writes the run to <code>eval_results/</code> (a
+            <code>.docx</code>/<code>.txt</code> report plus a <code>.json</code>)
+            and it shows up on the <b>Overview</b> tab.</li>
+        </ol>
+
+        <h2 class="help-h2">Reading the Overview tab</h2>
+        <ul class="help-list">
+          <li>The <b>Model metrics</b> table is offline numbers (test accuracy from
+            each checkpoint's own writeup) — useful for comparing models even
+            before a live trial exists for one of them.</li>
+          <li>The <b>trial table/charts</b> below are live runs recorded through this
+            page. Filter, sort, or chart by model, strategy, or any obstacle metric
+            to compare runs head-to-head.</li>
+          <li>Offline accuracy and live feel can disagree — a saturated benchmark
+            (e.g. 100% test accuracy) doesn't guarantee the better live trial; that's
+            what running the course is for.</li>
+        </ul>
+
+        <p class="hint">Full write-ups: <code>DOCS/models/&lt;name&gt;/README.md</code>
+          per checkpoint, <code>DOCS/build/strategies/3-cursor-and-click/</code> for
+          the click-FSM presets.</p>
       </div>
     </div>
   </section>

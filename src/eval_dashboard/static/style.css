@@ -33,6 +33,7 @@ body.show-cursor { cursor: auto; } /* survey/done: normal mouse is back */
   box-shadow: var(--shadow); padding: 40px 44px; text-align: center;
 }
 .card-wide { max-width: 760px; }
+.card-xw { max-width: 980px; }
 h1 { font-size: 2.2rem; margin: 0 0 12px; font-weight: 800; }
 .accent { color: var(--purple); }
 .lead { font-size: 1.1rem; color: var(--muted); margin: 0 0 20px; line-height: 1.5; }
@@ -61,6 +62,16 @@ kbd { background: #f1f5f9; border: 1px solid var(--line); border-bottom-width: 2
 .tracker-controls { margin: 0 0 14px; }
 .tracker-controls .hint { margin: 10px 0 0; }
 
+/* ---------- model picker ---------- */
+.model-picker { margin: 0 auto 18px; max-width: 480px; }
+.model-select {
+  width: 100%; font-family: inherit; font-size: .95rem; font-weight: 700;
+  color: var(--ink); padding: 11px 12px; border: 2px solid var(--line);
+  border-radius: 12px; background: #fff; cursor: pointer;
+}
+.model-select:focus { outline: none; border-color: var(--purple); }
+.model-select:disabled { opacity: .6; cursor: not-allowed; }
+
 /* ---------- strategy picker (fist-vs-rest: 3.2 vs 3.2.1) ---------- */
 .strategy-picker { margin: 0 auto 18px; max-width: 480px; }
 .sp-label { font-size: .72rem; font-weight: 700; letter-spacing: .06em;
@@ -78,7 +89,15 @@ kbd { background: #f1f5f9; border: 1px solid var(--line); border-bottom-width: 2
 .sp-opt:disabled { opacity: .55; cursor: not-allowed; }
 .sp-blurb { margin: 10px 0 0; min-height: 1.2em; }
 
-/* ---------- welcome tabs (Start / Overview) ---------- */
+/* ---------- Help tab ---------- */
+.help-h2 { font-size: 1.05rem; margin: 22px 0 8px; text-align: left; }
+.help-h2:first-of-type { margin-top: 0; }
+.help-list { text-align: left; margin: 0 0 14px; padding-left: 22px;
+             line-height: 1.6; color: var(--ink); }
+.help-list code, .hint code { background: #f1f5f9; border-radius: 6px; padding: 1px 6px;
+                  font-size: .9em; }
+
+/* ---------- welcome tabs (Start / Overview / Help) ---------- */
 .tabs { display: flex; gap: 6px; justify-content: center; margin: 0 0 22px;
         border-bottom: 1px solid var(--line); }
 .tab {
@@ -100,6 +119,19 @@ kbd { background: #f1f5f9; border: 1px solid var(--line); border-bottom-width: 2
              font-variant-numeric: tabular-nums; line-height: 1.1; }
 .ov-tile span { display: block; font-size: .78rem; color: var(--muted); margin-top: 4px; }
 .ov-tile small { display: block; font-size: .68rem; color: var(--muted); margin-top: 2px; }
+
+/* ---------- overview: offline model-metrics table ---------- */
+.model-compare { text-align: left; margin: 0 0 20px; }
+.mc-head { font-weight: 700; margin-bottom: 8px; }
+.mc-sub { font-weight: 400; margin: 0 0 0 6px; }
+.mc-table-wrap { border: 1px solid var(--line); border-radius: 14px; overflow: auto; }
+.mc-table { width: 100%; }
+.mc-table tr.mc-current { background: #f5f3ff; }
+.mc-tag { display: inline-block; font-size: .65rem; font-weight: 800;
+          text-transform: uppercase; letter-spacing: .04em; padding: 2px 7px;
+          border-radius: 999px; background: #ede9fe; color: var(--purple-d);
+          margin-left: 4px; }
+.mc-tag-best { background: #dcfce7; color: var(--green-d); }
 
 /* ---------- overview: per-trial table ---------- */
 .ov-table-wrap { max-height: 42vh; overflow: auto; border: 1px solid var(--line);
