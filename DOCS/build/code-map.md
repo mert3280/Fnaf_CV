@@ -118,7 +118,15 @@ once (AD-10), and registers the model.
 `audit_split_leakage.py` (attacks the Week-4 perfect test score) ·
 `bench_pipeline.py` (times the live loop's real stages per backend/capture config —
 the evidence behind Strategy 3.2.3; each config runs in its own process so thread
-pools can't contaminate the next).
+pools can't contaminate the next) ·
+`eval_crop_geometry.py` (measures the §A.3 **crop-source** contract — the evidence
+behind Strategy 3.2.4 / AD-25. `--stage geometry` needs no model and no webcam:
+HaGRID's annotations carry the bbox *and* the landmarks, so the hull the live
+detector would build is recoverable for every image on disk. `--stage classifier`
+feeds the same held-out images to a checkpoint twice — annotated crop vs. real
+MediaPipe crop across a `pad` sweep — and reports fist click-rate, false-click
+rate, and the 10th-percentile confidence that a `K`-frame confirm actually
+depends on).
 
 ## Configs (`configs/*.yaml`)
 `data.yaml` (pipeline defaults) plus per-experiment training configs: `baseline`,

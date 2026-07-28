@@ -54,7 +54,10 @@ def parse_args() -> argparse.Namespace:
     ap.add_argument("--no-mirror", action="store_true",
                     help="do not mirror the webcam (mapper compensates)")
     # detector (same flags/defaults as webcam_demo)
-    ap.add_argument("--pad", type=float, default=0.15)
+    ap.add_argument("--pad", type=float, default=0.35,
+                    help="live hand-bbox padding on the MediaPipe hull "
+                         "(0.35 recalibrates for the hull-vs-annotated-bbox gap, "
+                         "Strategy 3.2.4 / AD-25; training itself still pads at 0.15)")
     ap.add_argument("--hand-model", default=None)
     ap.add_argument("--detect-confidence", type=float, default=0.3)
     ap.add_argument("--presence-confidence", type=float, default=0.3)

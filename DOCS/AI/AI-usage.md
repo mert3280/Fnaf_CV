@@ -109,3 +109,26 @@ Template for each entry:
 ---
 
 <!-- Append Week 5 entry below as the project progresses. -->
+
+## Week 5 (in progress) — Live-gap investigation (2026-07-28)
+
+### Tasks AI assisted with
+- **Investigation of a live symptom, from a wrong starting hypothesis.** I reported that the tuned model looked "wildly overfit" — `not_fist` >90% every frame, real fists capping ~55% — and asked Claude to find what it could. It ruled overfitting out with specific evidence rather than agreeing with me, and traced the symptom to the **train/serve crop geometry**: training pads HaGRID's *annotated bbox*, the live loop pads MediaPipe's *21-landmark hull*, same `pad = 0.15` on two different boxes.
+- **A measurement I didn't know was available offline.** HaGRID's annotation JSONs carry the landmarks as well as the bbox, so the hull the live detector *would* build is recoverable for every image already on disk — the definition gap is measurable over 27k–29k images per gesture with no webcam and no model. That observation is what turned a hand-wave into a number.
+- **`scripts/eval_crop_geometry.py`** — both stages (population geometry; annotated-vs-MediaPipe crop through a checkpoint across a pad sweep), plus the docs: [Strategy 3.2.4](../build/strategies/3-cursor-and-click/03.2.4-crop-geometry-and-pad.md), AD-25, and the §A.3 contract note.
+
+### Prompts / context that worked well
+- **"I think it's overfit, but also look around and find what you can."** Leaving the hypothesis open is what let the investigation contradict it. A prompt that had asked *"fix the overfitting"* would have produced a retrain and left the actual cause in place.
+- **Making it reproduce the symptom offline before proposing anything.** The whole finding rests on feeding the *same* held-out images to the *same* checkpoint under two crop geometries — a controlled swap, the same drift-check discipline Week 4 taught me.
+
+### AI output that needed correction / guidance
+- **Nothing had to be reversed, but the boundary held where it counts.** The measured recommendation (`--pad` 0.15 → ~0.35) is a crop-tightness call, which is explicitly mine (see the "will NOT lean on AI" list). Claude shipped the measurement and the flag value and **changed no default**, recording the adoption question as **AD-25 Proposed** — the same pattern as AD-22. The competing option it surfaced (retrain on landmark-hull crops so the live box matches by construction) is the one I actually have to weigh, because it re-bases every accuracy number this project has published.
+- **One claim I'm holding it to:** the measurement is on HaGRID stills, so it isolates *geometry* and is a lower bound on the live gap. It says so in the doc. The arm's-length webcam regime is still unmeasured, and I won't let a clean offline table stand in for the live test.
+
+### Net assessment
+- As planned, and the most useful thing AI did this week was **disagree with my diagnosis and show its work**. Week 4's lesson was that the tooling generates numbers faster than I can interpret them; this week's is the mirror image — my own read of a symptom was the thing that needed the control experiment. Notable consequence I now own: every open-set false-click number published so far, including 3.2's headline unseen-`ok` 0.8%, was measured on annotated crops and is optimistic by an unmeasured amount under live geometry.
+
+### Follow-up, same day — AD-25 accepted
+- I decided the `--pad` default should move now rather than stay a flag I'd have to remember: **0.15 → 0.35** in `play.py`, `webcam_demo.py`, and the dashboard tracker. Before touching the default, Claude re-ran the geometry-stage script to confirm it still reproduced the doc's published numbers exactly — a check I hadn't asked for but agree with, since I was about to act on the memory of a table rather than the table itself.
+- Claude made the code edits and updated AD-25 from Proposed to Accepted, plus the strategy doc and README cross-references, at my explicit direction — it did not flip the default on its own initiative, consistent with the "will NOT lean on AI" line on cursor/click tuning calls.
+- Still mine to decide: retrain-on-landmark-hull-crops, and reading the live A/B once I test it against the actual game.

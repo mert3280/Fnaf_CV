@@ -252,21 +252,30 @@ const OV_METRICS = [
     get: (r) => asNum(r.surveyAvg), fmt: (v) => v.toFixed(1) },
 ];
 const ovMetric = (key) => OV_METRICS.find((m) => m.key === key);
-const OV_NUMERIC = OV_METRICS.filter((m) => !m.sortOnly);   // filterable + chartable
-const OV_OPS = {
-  ">":  (a, b) => a > b,
-  "≥":  (a, b) => a >= b,
-  "<":  (a, b) => a < b,
-  "≤":  (a, b) => a <= b,
-  "=":  (a, b) => Math.abs(a - b) < 1e-9,
-};
+const OV_NUMERIC = OV_METRICS.filter((m) => !m.sortOnly);   // chartable
+
+// Fixed-order categorical palette (validated for CVD + contrast; see the
+// dataviz skill). Assigned by identity (model/strategy name), never by rank,
+// so a value keeps its color as filters change what's on screen.
+const OV_PALETTE = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300", "#4a3aa7", "#e34948"];
+function buildOvColorMap(runs, key) {
+  const uniq = [...new Set(runs.map((r) => r[key] || "—"))].sort();
+  const map = new Map();
+  uniq.forEach((v, i) => map.set(v, OV_PALETTE[i % OV_PALETTE.length]));
+  return map;
+}
+function ovColorFor(r) {
+  const key = ovState.colorBy === "model" ? (r.model || "—") : (r.strategy || "—");
+  return ovState.colorMaps[ovState.colorBy].get(key) || "#94a3b8";
+}
 
 const ovState = {
   runs: [], strategy: "", model: "", search: "",
-  filters: [],                       // [{ key, op, value }]
-  sortKey: "date", sortDir: "desc",  // sortDir: desc | asc | best | worst
-  barMetric: "ob1Ms",                // "Trials over time" chart
-  scatX: "ob1Ms", scatY: "ob3Accuracy",   // "Metric vs metric" chart
+  sortKey: "date", sortDir: "best",  // sortDir: best | worst
+  barMetric: "ob1Ms",                // metric charted per model/strategy pair
+  barAgg: "mean",                    // "mean" | "count"
+  colorBy: "strategy",               // which field the chart bars are colored by
+  colorMaps: { strategy: new Map(), model: new Map() },
   wired: false,                      // controls get their listeners once
 };
 
@@ -283,20 +292,14 @@ function applyOvFilters(runs) {
     if (ovState.strategy && (r.strategy || "") !== ovState.strategy) return false;
     if (ovState.model && (r.model || "") !== ovState.model) return false;
     if (!ovSearchHit(r)) return false;
-    for (const f of ovState.filters) {
-      const v = ovMetric(f.key).get(r);
-      if (typeof v !== "number" || !OV_OPS[f.op](v, f.value)) return false;
-    }
     return true;
   });
 }
 
 // Resolve best/worst per metric: for times and deviation, LOWER is the good end.
 function ovDir(m) {
-  const d = ovState.sortDir;
-  if (d === "asc" || d === "desc") return d;
   const best = m.str ? "asc" : (m.better === "low" ? "asc" : "desc");
-  return d === "best" ? best : (best === "asc" ? "desc" : "asc");
+  return ovState.sortDir === "worst" ? (best === "asc" ? "desc" : "asc") : best;
 }
 
 function sortOvRuns(runs) {
@@ -331,17 +334,13 @@ function wireOvControls() {
   ovState.wired = true;
 
   const opts = (list) => list.map((m) => `<option value="${m.key}">${m.label}</option>`).join("");
-  $("ovMetric").innerHTML = opts(OV_NUMERIC);
-  $("ovOp").innerHTML = Object.keys(OV_OPS)
-    .map((op) => `<option value="${op}">${op}</option>`).join("");
-  $("ovOp").value = ">";
   $("ovSort").innerHTML = opts(OV_METRICS);
   $("ovSort").value = ovState.sortKey;
   $("ovSortDir").value = ovState.sortDir;
-  for (const id of ["ovBarMetric", "ovScatX", "ovScatY"]) $(id).innerHTML = opts(OV_NUMERIC);
+  $("ovBarMetric").innerHTML = opts(OV_NUMERIC);
   $("ovBarMetric").value = ovState.barMetric;
-  $("ovScatX").value = ovState.scatX;
-  $("ovScatY").value = ovState.scatY;
+  $("ovBarAgg").value = ovState.barAgg;
+  $("ovColorBy").value = ovState.colorBy;
 
   $("ovSearch").addEventListener("input", (e) => { ovState.search = e.target.value; renderOverview(); });
   $("ovStrategy").addEventListener("change", (e) => { ovState.strategy = e.target.value; renderOverview(); });
@@ -349,46 +348,25 @@ function wireOvControls() {
   $("ovSort").addEventListener("change", (e) => { ovState.sortKey = e.target.value; renderOverview(); });
   $("ovSortDir").addEventListener("change", (e) => { ovState.sortDir = e.target.value; renderOverview(); });
   $("ovBarMetric").addEventListener("change", (e) => { ovState.barMetric = e.target.value; renderOverview(); });
-  $("ovScatX").addEventListener("change", (e) => { ovState.scatX = e.target.value; renderOverview(); });
-  $("ovScatY").addEventListener("change", (e) => { ovState.scatY = e.target.value; renderOverview(); });
+  $("ovBarAgg").addEventListener("change", (e) => { ovState.barAgg = e.target.value; renderOverview(); });
+  $("ovColorBy").addEventListener("change", (e) => { ovState.colorBy = e.target.value; renderOverview(); });
 
   // Column headers sort too: first click puts the best runs on top, a second
-  // click flips the direction. The two selects stay in sync.
+  // click flips the direction. The "Sort by" select stays in sync.
   $("ovTable").addEventListener("click", (e) => {
     const th = e.target.closest("th[data-key]");
     if (!th) return;
     const key = th.dataset.key;
-    if (ovState.sortKey === key) {
-      ovState.sortDir = ovDir(ovMetric(key)) === "asc" ? "desc" : "asc";
-    } else {
-      ovState.sortKey = key;
-      ovState.sortDir = "best";
-    }
+    ovState.sortDir = (ovState.sortKey === key && ovState.sortDir === "best") ? "worst" : "best";
+    ovState.sortKey = key;
     $("ovSort").value = ovState.sortKey;
     $("ovSortDir").value = ovState.sortDir;
     renderOverview();
   });
 
-  $("ovAddFilter").addEventListener("click", () => {
-    const raw = $("ovVal").value;
-    if (raw === "") return;
-    const value = parseFloat(raw);
-    if (Number.isNaN(value)) return;
-    ovState.filters.push({ key: $("ovMetric").value, op: $("ovOp").value, value });
-    $("ovVal").value = "";
-    renderOverview();
-  });
-  $("ovVal").addEventListener("keydown", (e) => { if (e.key === "Enter") $("ovAddFilter").click(); });
-
   $("ovClear").addEventListener("click", () => {
-    ovState.filters = []; ovState.strategy = ""; ovState.model = ""; ovState.search = "";
+    ovState.strategy = ""; ovState.model = ""; ovState.search = "";
     $("ovStrategy").value = ""; $("ovModel").value = ""; $("ovSearch").value = "";
-    renderOverview();
-  });
-  $("ovChips").addEventListener("click", (e) => {
-    const i = e.target.dataset.i;
-    if (i === undefined) return;
-    ovState.filters.splice(+i, 1);
     renderOverview();
   });
 
@@ -401,11 +379,129 @@ function wireOvControls() {
   });
 }
 
-function renderOvChips() {
-  $("ovChips").innerHTML = ovState.filters.map((f, i) =>
-    `<span class="ovf-chip">${ovMetric(f.key).label} ${f.op} ${f.value}` +
-    `<button type="button" class="ovf-chip-x" data-i="${i}" aria-label="remove filter">×</button></span>`
+/* ---------- Overview: comparison charts (plain inline SVG, no chart lib) ----------
+ * Both charts read the same filtered/sorted `shown` slice as the table, and
+ * color every mark by whichever field (model/strategy) `ovColorBy` picks —
+ * that's the "graphic comparison between runs" the model-metrics table can't do.
+ */
+function renderOvLegend(el, runs) {
+  const key = ovState.colorBy;
+  const map = ovState.colorMaps[key];
+  const uniq = [...new Set(runs.map((r) => r[key] || "—"))].sort();
+  if (uniq.length < 2) { el.hidden = true; el.innerHTML = ""; return; }  // one series needs no legend
+  el.hidden = false;
+  el.innerHTML = uniq.map((v) =>
+    `<span class="ov-legend-item"><span class="ov-legend-swatch" style="background:${map.get(v)}"></span>${v}</span>`
   ).join("");
+}
+
+// A bar rounded only at its free (top) end, square at the baseline (mark spec).
+function roundedTopRectPath(x, y, w, h, r) {
+  r = Math.max(0, Math.min(r, w / 2, h));
+  return `M${x},${y + h} L${x},${y + r} Q${x},${y} ${x + r},${y} ` +
+         `L${x + w - r},${y} Q${x + w},${y} ${x + w},${y + r} L${x + w},${y + h} Z`;
+}
+
+// Minimal escaping for values (model/strategy names) interpolated into raw
+// SVG text/attribute strings below.
+function escapeXml(s) {
+  return String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+}
+
+// One group per (model, strategy) pair — this is the axis the tester actually
+// wants to compare ("which pairing wins"), not individual trials or time.
+function buildOvGroups(runs) {
+  const map = new Map();
+  runs.forEach((r) => {
+    const model = r.model || "—", strategy = r.strategy || "—";
+    const key = model + "␟" + strategy;
+    if (!map.has(key)) map.set(key, { model, strategy, label: `${model} · ${strategy}`, rows: [] });
+    map.get(key).rows.push(r);
+  });
+  return [...map.values()];
+}
+
+function renderOvGroupChart(runs) {
+  const body = $("ovBarBody"), note = $("ovBarNote");
+  const metric = ovMetric(ovState.barMetric);
+  const agg = ovState.barAgg;                          // "mean" | "count"
+  const fmt = (v) => (metric.fmt ? metric.fmt(v) : v.toFixed(1));
+  const groups = buildOvGroups(runs);
+
+  const pts = groups
+    .map((g) => {
+      const vals = g.rows.map(metric.get).filter((v) => typeof v === "number");
+      const y = agg === "count" ? vals.length : (vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null);
+      return { g, y, n: vals.length };
+    })
+    .filter((p) => typeof p.y === "number" && (agg === "count" ? p.y > 0 : p.n > 0));
+  renderOvLegend($("ovBarLegend"), runs);
+
+  if (!pts.length) {
+    body.innerHTML = ""; note.hidden = false;
+    note.textContent = `No trials have "${metric.label}" recorded.`;
+    return;
+  }
+  note.hidden = true;
+
+  // Rank so the best-performing pair sits at the left (mean: metric's own
+  // better direction; count: most trials first) — that's the "key in on the
+  // winner" view this chart exists for.
+  const asc = agg === "count" ? false : metric.better === "low";
+  pts.sort((a, b) => (asc ? a.y - b.y : b.y - a.y));
+
+  const n = pts.length;
+  const slot = 110, barW = 48;
+  const padL = 48, padR = 16, padT = 16, padB = 46;
+  const innerW = slot * n;
+  const W = Math.max(body.clientWidth || 0, padL + innerW + padR);
+  const H = 280;
+  const innerH = H - padT - padB;
+  const yMax = Math.max(...pts.map((p) => p.y), 1e-6) * 1.15;   // headroom for the value label
+  const yScale = (v) => padT + innerH - (v / yMax) * innerH;
+  const baseY = padT + innerH;
+  const valFmt = (v) => (agg === "count" ? String(v) : fmt(v));
+  const aggLabel = agg === "count" ? `Count of ${metric.label}` : `Mean ${metric.label}`;
+
+  // Each bar's model/strategy label is truncated to fit its own slot width —
+  // horizontal, not rotated, so it can never run into a neighboring bar or the
+  // chart's edges. The full untruncated label is still on the bar's tooltip.
+  const measureCtx = (renderOvGroupChart._ctx ||= document.createElement("canvas").getContext("2d"));
+  measureCtx.font = "600 10px 'Segoe UI', system-ui, sans-serif";   // matches .ov-xlabel weight
+  const labelBudget = slot - 8;
+  function fitLabel(str) {
+    if (measureCtx.measureText(str).width <= labelBudget) return str;
+    let lo = 0, hi = str.length;
+    while (lo < hi) {
+      const mid = (lo + hi + 1) >> 1;
+      if (measureCtx.measureText(str.slice(0, mid) + "…").width <= labelBudget) lo = mid; else hi = mid - 1;
+    }
+    return str.slice(0, lo) + "…";
+  }
+
+  let svg = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Model/strategy comparison: ${aggLabel}">`;
+  const gridN = 4;
+  for (let i = 0; i <= gridN; i++) {
+    const v = (i / gridN) * yMax;
+    const y = yScale(v);
+    svg += `<line class="ov-grid-line" x1="${padL}" x2="${W - padR}" y1="${y.toFixed(1)}" y2="${y.toFixed(1)}"/>`;
+    svg += `<text class="ov-tick-label" x="${padL - 6}" y="${(y + 3).toFixed(1)}" text-anchor="end">${agg === "count" ? Math.round(v) : fmt(v)}</text>`;
+  }
+  svg += `<line class="ov-axis-line" x1="${padL}" x2="${W - padR}" y1="${baseY}" y2="${baseY}"/>`;
+  pts.forEach((p, i) => {
+    const cx = padL + slot * i + slot / 2;
+    const y = yScale(p.y);
+    const h = Math.max(2, baseY - y);
+    const color = ovColorFor(p.g.rows[0]);
+    const path = roundedTopRectPath(cx - barW / 2, y, barW, h, 4);
+    const title = `${p.g.label} — ${aggLabel} ${valFmt(p.y)} (n=${p.n})`;
+    svg += `<path class="ov-bar" d="${path}" fill="${color}"><title>${escapeXml(title)}</title></path>`;
+    svg += `<text class="ov-tick-label" x="${cx}" y="${(y - 6).toFixed(1)}" text-anchor="middle">${valFmt(p.y)}</text>`;
+    svg += `<text class="ov-tick-label ov-xlabel" x="${cx}" y="${baseY + 18}" text-anchor="middle">` +
+           `${escapeXml(fitLabel(p.g.label))}<title>${escapeXml(p.g.label)}</title></text>`;
+  });
+  svg += `</svg>`;
+  body.innerHTML = svg;
 }
 
 async function loadOverview() {
@@ -413,6 +509,9 @@ async function loadOverview() {
   try { runs = (await (await fetch("/api/history")).json()).runs || []; }
   catch (_) { /* server not up */ }
   ovState.runs = runs;
+  // Built from the FULL set (not the filtered slice) so a value's color stays
+  // put as filters narrow what's on screen (color follows identity, not rank).
+  ovState.colorMaps = { strategy: buildOvColorMap(runs, "strategy"), model: buildOvColorMap(runs, "model") };
   wireOvControls();
   populateOvSelects();
   renderOverview();
@@ -420,12 +519,11 @@ async function loadOverview() {
 
 function renderOverview() {
   const agg = $("ovAgg"), tbl = $("ovTable"), empty = $("ovEmpty");
-  const wrap = $("ovTableWrap"), filters = $("ovFilters");
-  renderOvChips();
+  const wrap = $("ovTableWrap"), filters = $("ovFilters"), charts = $("ovCharts");
 
   if (!ovState.runs.length) {                  // nothing recorded at all
     agg.innerHTML = ""; tbl.innerHTML = "";
-    filters.hidden = true; wrap.hidden = true;
+    filters.hidden = true; wrap.hidden = true; charts.hidden = true;
     empty.hidden = false;
     empty.textContent = "No trials recorded yet — run the course to see results here.";
     return;
@@ -435,11 +533,17 @@ function renderOverview() {
   const shown = sortOvRuns(applyOvFilters(ovState.runs));
   if (!shown.length) {                         // runs exist but the filter hides them all
     agg.innerHTML = ""; tbl.innerHTML = "";
-    wrap.hidden = true; empty.hidden = false;
+    wrap.hidden = true; charts.hidden = true; empty.hidden = false;
     empty.textContent = "No trials match these filters.";
     return;
   }
   empty.hidden = true; wrap.hidden = false;
+
+  // Charts need at least 2 trials to be a comparison; below that just show the table.
+  charts.hidden = shown.length < 2;
+  if (shown.length >= 2) {
+    renderOvGroupChart(shown);
+  }
 
   // Aggregate headline scores across the matching runs (best where lower/higher is better).
   const nums = (sel) => shown.map(sel).filter((v) => typeof v === "number");

@@ -23,8 +23,12 @@ body.show-cursor { cursor: auto; } /* survey/done: normal mouse is back */
   position: fixed; inset: 0;
   display: none; align-items: center; justify-content: center;
   padding: 24px;
+  overflow-y: auto;   /* long tab content (Overview) can scroll instead of clipping */
 }
 .screen.active { display: flex; }
+/* `safe center`: centers short content like the other screens, but falls back to
+   top alignment instead of clipping the top when the Overview tab grows tall. */
+#screen-welcome { align-items: safe center; }
 
 /* ---------- cards ---------- */
 .card {
@@ -163,24 +167,35 @@ kbd { background: #f1f5f9; border: 1px solid var(--line); border-bottom-width: 2
 .ov-filters select:focus, .ov-filters input:focus {
   outline: none; border-color: var(--purple); }
 .ovf-dir { align-self: flex-end; }
-.ovf-op { width: 62px; }
-.ovf-val { width: 96px; }
 .ovf-btn { font-family: inherit; font-weight: 700; font-size: .85rem; cursor: pointer;
            padding: 9px 14px; border-radius: 10px; border: 2px solid var(--purple);
-           background: var(--purple); color: #fff; }
+           background: var(--purple); color: #fff; align-self: flex-end; }
 .ovf-btn:hover { background: var(--purple-d); border-color: var(--purple-d); }
 .ovf-btn-ghost { background: #fff; color: var(--muted); border-color: var(--line); }
 .ovf-btn-ghost:hover { color: var(--ink); border-color: var(--muted); background: #f8fafc; }
-.ovf-chips { display: flex; flex-wrap: wrap; gap: 8px; }
-.ovf-chips:empty { display: none; }
-.ovf-chip { display: inline-flex; align-items: center; gap: 6px; font-size: .8rem;
-            font-weight: 700; color: var(--purple-d); background: #f5f3ff;
-            border: 1px solid #ddd6fe; border-radius: 999px; padding: 4px 6px 4px 12px; }
-.ovf-chip-x { border: none; background: #ddd6fe; color: var(--purple-d);
-              width: 18px; height: 18px; border-radius: 50%; cursor: pointer;
-              font-family: inherit; font-size: .9rem; line-height: 1;
-              display: grid; place-items: center; padding: 0; }
-.ovf-chip-x:hover { background: var(--purple); color: #fff; }
+
+/* ---------- overview: comparison chart ---------- */
+.ov-charts { display: grid; grid-template-columns: 1fr; gap: 16px; margin: 0 0 22px; }
+.ov-chart { border: 1px solid var(--line); border-radius: 14px; background: #fff;
+            padding: 14px 16px 10px; margin: 0; }
+.ov-chart-head { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px 14px;
+                 margin-bottom: 6px; }
+.ov-chart-title { font-weight: 700; font-size: .92rem; margin-right: auto; color: var(--ink); }
+.ov-chart-body { overflow-x: auto; }
+.ov-chart-body svg { height: auto; display: block; overflow: visible; }
+/* the group-comparison chart sizes its own width (one slot per bar) and
+   scrolls rather than squishing bars when there are many pairs */
+#ovBarBody svg { width: auto; max-width: none; }
+.ov-legend { display: flex; flex-wrap: wrap; gap: 8px 14px; margin: 0 0 8px; font-size: .78rem;
+             color: var(--muted); }
+.ov-legend-item { display: inline-flex; align-items: center; gap: 6px; }
+.ov-legend-swatch { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+.ov-chart-note { font-size: .8rem; color: var(--muted); margin: 8px 0 0; }
+.ov-bar { transition: opacity .1s ease; }
+.ov-bar:hover { opacity: .8; }
+.ov-grid-line, .ov-axis-line { stroke: var(--line); stroke-width: 1; }
+.ov-tick-label { fill: var(--muted); font-size: 10px; font-family: inherit; }
+.ov-xlabel { font-weight: 600; }
 
 /* ---------- banner (top of each obstacle) ---------- */
 .banner {

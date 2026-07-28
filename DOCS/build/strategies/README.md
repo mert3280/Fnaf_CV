@@ -29,6 +29,7 @@ worked, how well, and where did each break?*
 | 3.2.1 | [Snappier click FSM](3-cursor-and-click/03.2.1-snappier-fsm.md) | **same 3.2 model**, click FSM retuned: conf 0.70→**0.80**, K 3→**2** (stricter gate, faster confirm) | — ⁶ | snappier clicks; false-click cost meant to wash (0.80 gate offsets K=2); live A/B pending | tuning variant |
 | 3.2.2 | [Tuned champion checkpoint](3-cursor-and-click/03.2.2-tuned-champion-checkpoint.md) | same pipeline, **retrained checkpoint**: head-init fix (AD-22) + TPE search + 2-block unfreeze; registered in MLflow (AD-24), orchestrated by a task DAG (AD-23) | **1.0000** ⁷ | offline benchmark saturated; open-set `ok` false-click rate unchanged (0.8%→0.8%); live A/B pending | tuning variant |
 | 3.2.3 | [Latency + click delivery](3-cursor-and-click/03.2.3-latency-and-click-delivery.md) | same model & FSM values, **runtime re-engineered**: ONNX Runtime for stage 2, threaded capture, capped torch threads, and a click with real hold time | — ⁸ | **21.0 → 28.3 FPS** on AC (camera-capped), −67 ms input lag, 0 → 60 ms click hold; **plug the laptop in** — on battery it's 9–11 FPS regardless; live test pending | **current runtime** |
+| 3.2.4 | [Crop geometry + live `pad`](3-cursor-and-click/03.2.4-crop-geometry-and-pad.md) | same model, same FSM, same runtime — **measures the crop the classifier actually gets live** and recalibrates `--pad` default 0.15 → **0.35** (accepted, AD-25) | — ⁹ | live crop was **1.3× tighter** than training's, worst on `fist`; at the old `pad 0.15` a real fist's p10 confidence was **0.464** (under both gates), at the new default **0.35** it's **0.932** and fist click-rate 81.5 → 94.4% with false clicks 0.7 → 0.0%; live A/B against the real game still pending | **measurement + accepted default change** |
 
 ¹ 0.917 is on HaGRID's *own* annotated crops. Fed the **live MediaPipe** crop it
 is ~0.71 on detected HaGRID stills — the train/serve gap is documented in the
@@ -86,8 +87,31 @@ stage — 9–11 FPS *with* every fix applied, i.e. worse than the unfixed loop 
 AC. Power state is the largest single term in the budget. Implemented and
 unit-tested; **live test against the game still pending**, like everything else
 in Step 5.
+⁹ 3.2.4 changes **no model and no FSM value** — it is a measurement of a
+contract (§A.3) that had been asserted since Strategy 2 and never checked, and
+Ted accepted its recommendation: the live `--pad` default moved 0.15 → 0.35 in
+`play.py`, `webcam_demo.py`, and the dashboard tracker (training's `bbox_pad`
+config is untouched). Training crops HaGRID's **annotated hand bbox**; the live
+loop crops MediaPipe's **21-landmark hull**. Both used to add the same
+`pad = 0.15`, which is why the geometry *looked* matched — but a hull is not a
+bbox. Measured over the full downloaded population
+(27k–29k images/gesture, from HaGRID's own landmarks, no webcam needed): the hull
+is **0.768×** the annotated box linearly, and the spread is anatomical —
+**`fist` 0.705** (curled fingers sit *inside* the silhouette) vs. `palm` 0.849
+(landmarks reach the fingertips). So the most-distorted class at inference is the
+one class that has to be crisp to fire a click. MediaPipe itself is exonerated:
+its detected hull matches HaGRID's ground-truth hull at **0.995–1.054×**, so the
+gap is a *definition* mismatch, not detection error. At the click gate this costs
+the tail, not the average — median p(fist) 0.927 vs 0.984, but **p10 0.464 vs
+0.932**, and `K` consecutive frames over the gate is exactly what a bottom-decile
+frame breaks. The "overfit" hypothesis is ruled out specifically: val = test =
+1.0000 with no variance gap, the loss *reverses* when only the crop changes, and
+the tuned champion is the **most** robust of the five checkpoints under live
+geometry (81.5% fist click / 0.7% false, vs. the 3.2 model it replaced at 77.8% /
+**10.7%**). Reproduce with
+[`scripts/eval_crop_geometry.py`](../../../scripts/eval_crop_geometry.py).
 
-## The arc (1 → 2 → 2.1 → 3 → 3.1 → 3.1.1 → 3.2 → 3.2.1 → 3.2.2 → 3.2.3)
+## The arc (1 → 2 → 2.1 → 3 → 3.1 → 3.1.1 → 3.2 → 3.2.1 → 3.2.2 → 3.2.3 → 3.2.4)
 
 **1 → 2.** Strategy 1 classified the **whole webcam frame** and hit 53% test —
 not a model failure but an *input* one: a HaGRID hand is <5% of the frame, so a

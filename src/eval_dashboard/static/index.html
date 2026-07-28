@@ -67,8 +67,8 @@
           <div id="modelCompareTable" class="mc-table-wrap"></div>
         </div>
 
-        <!-- Filter + sort + search controls (metric selects/options injected in JS).
-             Everything below this bar — tiles, charts, table — shows the same slice. -->
+        <!-- Filter + sort controls. Everything below this bar — tiles, charts,
+             table — shows the same slice. -->
         <div id="ovFilters" class="ov-filters">
           <div class="ovf-row">
             <label class="ovf-field ovf-grow">Search
@@ -80,56 +80,45 @@
             <label class="ovf-field">Model
               <select id="ovModel"><option value="">All models</option></select>
             </label>
-          </div>
-          <div class="ovf-row">
             <label class="ovf-field">Sort by
               <select id="ovSort"></select>
             </label>
             <select id="ovSortDir" class="ovf-dir" aria-label="Sort direction">
-              <option value="desc">Highest → lowest</option>
-              <option value="asc">Lowest → highest</option>
               <option value="best">Best first</option>
               <option value="worst">Worst first</option>
             </select>
-            <label class="ovf-field">Metric filter
-              <select id="ovMetric"></select>
-            </label>
-            <select id="ovOp" class="ovf-op" aria-label="Comparison"></select>
-            <input id="ovVal" class="ovf-val" type="number" step="any" placeholder="value" />
-            <button id="ovAddFilter" type="button" class="ovf-btn">+ Add filter</button>
-            <button id="ovClear" type="button" class="ovf-btn ovf-btn-ghost">Clear all</button>
+            <button id="ovClear" type="button" class="ovf-btn ovf-btn-ghost">Clear filters</button>
           </div>
-          <div id="ovChips" class="ovf-chips"><!-- active filter chips injected here --></div>
         </div>
 
         <div id="ovAgg" class="ov-agg"><!-- aggregate stat tiles injected here --></div>
 
-        <!-- Comparison charts: pick the metric(s); every mark is one trial -->
+        <!-- Comparison chart: one bar per model/strategy pair, so you can see at
+             a glance which pairing produces the best results. Hidden until
+             there are at least 2 trials to compare. -->
         <div id="ovCharts" class="ov-charts" hidden>
-          <figure class="ov-chart">
+          <figure class="ov-chart ov-chart-full">
             <figcaption class="ov-chart-head">
-              <span class="ov-chart-title">Trials over time</span>
+              <span class="ov-chart-title">Model / strategy comparison</span>
               <label class="ovf-field">Metric
                 <select id="ovBarMetric"></select>
+              </label>
+              <label class="ovf-field">Aggregate
+                <select id="ovBarAgg">
+                  <option value="mean">Mean</option>
+                  <option value="count">Count</option>
+                </select>
+              </label>
+              <label class="ovf-field">Color by
+                <select id="ovColorBy">
+                  <option value="strategy">Strategy</option>
+                  <option value="model">Model</option>
+                </select>
               </label>
             </figcaption>
             <div id="ovBarLegend" class="ov-legend" hidden></div>
             <div id="ovBarBody" class="ov-chart-body"></div>
             <p id="ovBarNote" class="ov-chart-note" hidden></p>
-          </figure>
-          <figure class="ov-chart">
-            <figcaption class="ov-chart-head">
-              <span class="ov-chart-title">Metric vs metric</span>
-              <label class="ovf-field">X
-                <select id="ovScatX"></select>
-              </label>
-              <label class="ovf-field">Y
-                <select id="ovScatY"></select>
-              </label>
-            </figcaption>
-            <div id="ovScatLegend" class="ov-legend" hidden></div>
-            <div id="ovScatBody" class="ov-chart-body"></div>
-            <p id="ovScatNote" class="ov-chart-note" hidden></p>
           </figure>
         </div>
 

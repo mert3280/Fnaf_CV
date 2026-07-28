@@ -59,8 +59,10 @@ def parse_args() -> argparse.Namespace:
     ap.add_argument("--topk", type=int, default=5, help="how many predictions to show")
     ap.add_argument("--roi", type=float, default=0.6,
                     help="fallback ROI square side as a fraction of the short side")
-    ap.add_argument("--pad", type=float, default=0.15,
-                    help="hand-bbox padding for the detector crop (match training: 0.15)")
+    ap.add_argument("--pad", type=float, default=0.35,
+                    help="live hand-bbox padding on the MediaPipe hull "
+                         "(0.35 recalibrates for the hull-vs-annotated-bbox gap, "
+                         "Strategy 3.2.4 / AD-25; training itself still pads at 0.15)")
     ap.add_argument("--pad-step", type=float, default=0.05,
                     help="how much the [ and ] keys change pad live")
     ap.add_argument("--near-frac", type=float, default=0.4,

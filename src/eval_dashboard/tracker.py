@@ -37,7 +37,7 @@ class TrackerConfig:
     dry_run: bool = False          # run the pipeline but send NO real OS input
     mirror: bool = True
     # detector
-    pad: float = 0.15
+    pad: float = 0.35  # recalibrated hull-vs-annotated-bbox gap (Strategy 3.2.4 / AD-25)
     hand_model: str | None = None
     detect_confidence: float = 0.3
     presence_confidence: float = 0.3
