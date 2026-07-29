@@ -90,7 +90,6 @@ Two blocks, deliberately stacked in this order:
    accuracy, average survey) over whatever slice the filters select.
 
 ![Overview comparison chart](ui-screenshots/03-overview-comparison-chart.png)
-![Overview trial table](ui-screenshots/04-overview-trial-table.png)
 
 The chart groups trials by **model/strategy pair** with a switchable metric,
 aggregate, and colour-by; the table below shows the same filtered slice row by
@@ -99,6 +98,15 @@ filtered slice, so a series keeps its colour as you narrow the view. The
 categorical palette was validated for colour-vision deficiency and contrast
 before use; the table underneath is the accessible fallback for the low-contrast
 slots.
+
+![Overview filtered and sorted](ui-screenshots/04-overview-filtered-and-sorted.png)
+
+The same tab with the controls actually doing something: filtered to one model
+(`8 of 11 trials shown`), charted on **trace accuracy**, sorted worst-first.
+Tiles, chart, legend and table all narrow to the same slice together — and the
+comparison it surfaces is a real one, **3.2.1 (snappy) averaging 69 on trace
+accuracy against 3.2's 54** on the same checkpoint. That is the kind of question
+this tab exists to answer, and it isn't visible anywhere in the offline metrics.
 
 The screenshots above show the **11 real trials** recorded between 2026-07-21 and
 2026-07-28 across three model/strategy pairings — this is genuine head-to-head
