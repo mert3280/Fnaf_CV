@@ -10,6 +10,11 @@
 }
 
 * { box-sizing: border-box; }
+/* The JS hides things with the `hidden` attribute, but any author rule that sets
+   `display` (.status-chip: flex, .ov-charts: grid, .ov-legend: flex) outranks the
+   UA's `[hidden] { display: none }` — so `hidden` silently did nothing on those.
+   One global rule makes the attribute authoritative everywhere. */
+[hidden] { display: none !important; }
 html, body {
   margin: 0; height: 100%; overflow: hidden;
   background: #ffffff; color: var(--ink);

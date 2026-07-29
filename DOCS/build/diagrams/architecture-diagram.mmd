@@ -1,0 +1,66 @@
+%%{init: {'theme': 'base', 'themeVariables': {
+  'fontFamily': 'Cascadia Code, JetBrains Mono, Consolas, monospace',
+  'fontSize': '13px',
+  'background': '#FBFAF7',
+  'primaryColor': '#FBFAF7',
+  'primaryBorderColor': '#1A2129',
+  'primaryTextColor': '#1A2129',
+  'lineColor': '#5B6470',
+  'edgeLabelBackground':'#FBFAF7',
+  'clusterBkg': '#F5F3EE',
+  'clusterBorder': '#C7CCD1',
+  'tertiaryColor': '#FBFAF7'
+}}}%%
+flowchart TD
+  subgraph OFFLINE["OFFLINE · training — src/data, src/models, train.py"]
+    direction TB
+    HAGRID["HaGRID annotations<br/>palm + fist only · AD-18"]
+    DATAPIPE["data pipeline<br/>parse → split by user_id (AD-16)<br/>crop to bbox +15% pad → transform"]
+    BACKBONE["timm backbone<br/>MobileNetV3 + fresh 2-class head"]
+    TRAINSTEP["train.py<br/>freeze → progressive unfreeze · AD-08"]
+    EXPORT["export<br/>ONNX + TorchScript, parity-checked · AD-11"]
+    HAGRID --> DATAPIPE --> BACKBONE --> TRAINSTEP --> EXPORT
+  end
+
+  subgraph ORCH["ORCHESTRATION & DEPLOYMENT · Week 4 — src/pipeline, src/serve"]
+    direction TB
+    DAG["pipeline/dag.py<br/>topo order · freshness cache · retries · AD-23"]
+    TASKS["pipeline/tasks.py<br/>ingest → split → tune → register → serve-check"]
+    TUNEBOX["tune.py<br/>Optuna TPE, cached-feature arm + control run · AD-22"]
+    REGISTRY[("MLflow Registry<br/>fnaf-click-classifier · champion alias · AD-24")]
+    SERVE["serve/app.py<br/>Flask /predict — validation only, not in RT loop"]
+    DAG --> TASKS --> TUNEBOX --> REGISTRY
+    REGISTRY --> SERVE
+  end
+
+  EXPORT --> REGISTRY
+
+  subgraph ONLINE["ONLINE · real-time loop — 28.3 FPS measured — src/rt, src/control"]
+    direction TB
+    WEBCAM["webcam"]
+    CAPTURE["capture.py<br/>threaded, newest-frame-only grabber"]
+    DETECT["detector.py<br/>MediaPipe Hands → 21-landmark hull<br/>pad 0.35 · AD-25"]
+    CURSOR["cursor.py<br/>palm anchor → adaptive control box<br/>EMA + dead-zone · AD-19"]
+    PRE["preprocess.py<br/>same build_transforms as training · §A.3"]
+    INFER["backends.py<br/>ONNX (default) / PyTorch<br/>fist vs. not_fist · AD-21"]
+    FSM["click_fsm.py<br/>K-frame debounce, edge-triggered<br/>re-arm on palm · AD-20"]
+    INPUT["input_sim.py<br/>pydirectinput SendInput<br/>move every frame + ~60ms click hold · AD-14"]
+    FNAF[("FNAF 1<br/>real Steam game, DirectX")]
+    WEBCAM --> CAPTURE --> DETECT
+    DETECT -->|hand position, every frame| CURSOR
+    DETECT -->|hull crop| PRE --> INFER --> FSM
+    CURSOR --> INPUT
+    FSM --> INPUT --> FNAF
+  end
+
+  REGISTRY -. loads champion .-> INFER
+
+  classDef offline fill:#E4EEEE,stroke:#1F6F6F,stroke-width:1.5px,color:#123B3B
+  classDef online fill:#FBEEDF,stroke:#B5651D,stroke-width:1.5px,color:#5C3A12
+  classDef orch fill:#E9E9F3,stroke:#5B5F97,stroke-width:1.5px,color:#2C2E52
+  classDef store fill:#1A2129,stroke:#1A2129,stroke-width:1.5px,color:#F5F3EE
+
+  class HAGRID,DATAPIPE,BACKBONE,TRAINSTEP,EXPORT offline
+  class WEBCAM,CAPTURE,DETECT,CURSOR,PRE,INFER,FSM,INPUT online
+  class DAG,TASKS,TUNEBOX,SERVE orch
+  class REGISTRY,FNAF store

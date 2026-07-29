@@ -1,0 +1,444 @@
+<title>Fnaf_CV — System Architecture</title>
+<style>
+  :root{
+    --paper:#EEF1F3;
+    --paper-raised:#FFFFFF;
+    --ink:#1A2129;
+    --ink-soft:#4A535E;
+    --line:#D3D9DE;
+    --line-soft:#E3E7EA;
+    --offline:#1F6F6F;
+    --offline-bg:#E4EEEE;
+    --online:#B5651D;
+    --online-bg:#FBEEDF;
+    --orch:#5B5F97;
+    --orch-bg:#E9E9F3;
+    --store:#1A2129;
+    --focus:#2B6E6E;
+    --blueprint-paper:#FBFAF7;
+    --blueprint-line:#C7CCD1;
+    --blueprint-cluster:#F5F3EE;
+  }
+  :root[data-theme="dark"]{
+    --paper:#12161B;
+    --paper-raised:#191F26;
+    --ink:#E7EAED;
+    --ink-soft:#A6B0B9;
+    --line:#2B333B;
+    --line-soft:#232A31;
+    --offline:#6FC7C0;
+    --offline-bg:#16302E;
+    --online:#E0A25F;
+    --online-bg:#332314;
+    --orch:#9EA3E0;
+    --orch-bg:#25263B;
+    --store:#E7EAED;
+    --focus:#6FC7C0;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --paper:#12161B;
+      --paper-raised:#191F26;
+      --ink:#E7EAED;
+      --ink-soft:#A6B0B9;
+      --line:#2B333B;
+      --line-soft:#232A31;
+      --offline:#6FC7C0;
+      --offline-bg:#16302E;
+      --online:#E0A25F;
+      --online-bg:#332314;
+      --orch:#9EA3E0;
+      --orch-bg:#25263B;
+      --store:#E7EAED;
+      --focus:#6FC7C0;
+    }
+  }
+
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--paper);
+    color:var(--ink);
+    font-family:-apple-system,"Segoe UI",ui-sans-serif,Roboto,Helvetica,Arial,sans-serif;
+    font-size:15px;
+    line-height:1.55;
+    padding:40px 20px 64px;
+  }
+  ::selection{background:var(--focus);color:var(--blueprint-paper);}
+  a{color:var(--focus);}
+  a:focus-visible,button:focus-visible{outline:2px solid var(--focus);outline-offset:2px;}
+
+  .page{max-width:1180px;margin:0 auto;}
+
+  .mono{
+    font-family:"Cascadia Code","JetBrains Mono",ui-monospace,"SFMono-Regular",Consolas,monospace;
+  }
+
+  header.masthead{
+    display:flex;
+    flex-direction:column;
+    gap:6px;
+    margin-bottom:34px;
+    padding-bottom:22px;
+    border-bottom:1px solid var(--line);
+  }
+  .eyebrow{
+    font-family:"Cascadia Code","JetBrains Mono",ui-monospace,Consolas,monospace;
+    font-size:11.5px;
+    letter-spacing:.12em;
+    text-transform:uppercase;
+    color:var(--ink-soft);
+  }
+  h1{
+    font-family:"Cascadia Code","JetBrains Mono",ui-monospace,Consolas,monospace;
+    font-weight:600;
+    font-size:clamp(22px,3vw,30px);
+    margin:2px 0 4px;
+    text-wrap:balance;
+    letter-spacing:-.01em;
+  }
+  .subhead{
+    color:var(--ink-soft);
+    font-size:15px;
+    max-width:74ch;
+  }
+  .meta-row{
+    display:flex;
+    flex-wrap:wrap;
+    gap:8px 18px;
+    margin-top:10px;
+    font-size:12.5px;
+    color:var(--ink-soft);
+  }
+  .meta-row span b{color:var(--ink);font-weight:600;}
+
+  section{margin-bottom:40px;}
+  h2{
+    font-family:"Cascadia Code","JetBrains Mono",ui-monospace,Consolas,monospace;
+    font-size:13px;
+    letter-spacing:.08em;
+    text-transform:uppercase;
+    color:var(--ink-soft);
+    margin:0 0 14px;
+    display:flex;
+    align-items:center;
+    gap:10px;
+  }
+  h2::after{
+    content:"";
+    flex:1;
+    height:1px;
+    background:var(--line);
+  }
+
+  /* ---- diagram card: deliberately a fixed "blueprint sheet" in both themes ---- */
+  .blueprint{
+    background:var(--blueprint-paper);
+    border:1px solid var(--line);
+    border-radius:3px;
+    box-shadow:0 1px 2px rgba(0,0,0,.06), 0 8px 24px -12px rgba(0,0,0,.18);
+    padding:18px 18px 10px;
+  }
+  :root[data-theme="dark"] .blueprint{
+    box-shadow:0 1px 2px rgba(0,0,0,.4), 0 12px 28px -12px rgba(0,0,0,.55);
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]) .blueprint{
+      box-shadow:0 1px 2px rgba(0,0,0,.4), 0 12px 28px -12px rgba(0,0,0,.55);
+    }
+  }
+  .blueprint-scroll{
+    overflow-x:auto;
+    padding-bottom:8px;
+  }
+  .blueprint-scroll pre.mermaid{
+    margin:0;
+    min-width:920px;
+  }
+  .blueprint-caption{
+    font-size:12px;
+    color:#6B7580;
+    padding:2px 4px 0;
+    font-family:"Cascadia Code","JetBrains Mono",ui-monospace,Consolas,monospace;
+  }
+
+  /* ---- legend ---- */
+  .legend{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(230px,1fr));
+    gap:12px;
+    margin-top:16px;
+  }
+  .legend-card{
+    background:var(--paper-raised);
+    border:1px solid var(--line-soft);
+    border-radius:8px;
+    padding:14px 16px;
+  }
+  .legend-swatch{
+    display:inline-flex;
+    align-items:center;
+    gap:8px;
+    font-family:"Cascadia Code","JetBrains Mono",ui-monospace,Consolas,monospace;
+    font-size:12px;
+    letter-spacing:.04em;
+    text-transform:uppercase;
+    font-weight:600;
+    margin-bottom:6px;
+  }
+  .dot{width:9px;height:9px;border-radius:2px;flex:none;}
+  .dot.offline{background:var(--offline);}
+  .dot.online{background:var(--online);}
+  .dot.orch{background:var(--orch);}
+  .dot.store{background:var(--store);border:1px solid var(--line);}
+  .legend-card p{margin:0;font-size:13.5px;color:var(--ink-soft);}
+  .legend-card code{
+    font-family:"Cascadia Code","JetBrains Mono",ui-monospace,Consolas,monospace;
+    font-size:12.5px;
+    background:var(--line-soft);
+    padding:1px 5px;
+    border-radius:4px;
+    color:var(--ink);
+  }
+
+  /* ---- contract callout ---- */
+  .contract{
+    background:var(--paper-raised);
+    border:1px solid var(--line-soft);
+    border-left:3px solid var(--focus);
+    border-radius:0 8px 8px 0;
+    padding:16px 18px;
+    display:grid;
+    grid-template-columns:auto 1fr;
+    gap:4px 14px;
+    align-items:baseline;
+  }
+  .contract .tag{
+    grid-column:1;
+    font-family:"Cascadia Code","JetBrains Mono",ui-monospace,Consolas,monospace;
+    font-size:11px;
+    letter-spacing:.06em;
+    text-transform:uppercase;
+    color:var(--focus);
+    align-self:start;
+    padding-top:2px;
+  }
+  .contract .body{grid-column:2;font-size:13.8px;color:var(--ink-soft);}
+  .contract .body strong{color:var(--ink);}
+  .contract + .contract{margin-top:10px;}
+
+  /* ---- decision table ---- */
+  .table-wrap{overflow-x:auto;border:1px solid var(--line-soft);border-radius:8px;}
+  table{
+    width:100%;
+    border-collapse:collapse;
+    background:var(--paper-raised);
+    font-size:13.5px;
+    min-width:720px;
+  }
+  thead th{
+    text-align:left;
+    font-family:"Cascadia Code","JetBrains Mono",ui-monospace,Consolas,monospace;
+    font-size:11px;
+    letter-spacing:.06em;
+    text-transform:uppercase;
+    color:var(--ink-soft);
+    font-weight:600;
+    padding:10px 14px;
+    border-bottom:1px solid var(--line);
+    white-space:nowrap;
+  }
+  tbody td{
+    padding:10px 14px;
+    border-bottom:1px solid var(--line-soft);
+    color:var(--ink-soft);
+    vertical-align:top;
+  }
+  tbody tr:last-child td{border-bottom:none;}
+  td.ad{
+    font-family:"Cascadia Code","JetBrains Mono",ui-monospace,Consolas,monospace;
+    color:var(--ink);
+    font-weight:600;
+    white-space:nowrap;
+  }
+  td.decision{color:var(--ink);font-weight:500;}
+  tbody tr:hover td{background:var(--line-soft);}
+
+  footer{
+    margin-top:44px;
+    padding-top:18px;
+    border-top:1px solid var(--line);
+    font-size:12.5px;
+    color:var(--ink-soft);
+    display:flex;
+    flex-wrap:wrap;
+    gap:6px 18px;
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    *{animation-duration:.001ms !important;transition-duration:.001ms !important;}
+  }
+</style>
+
+<div class="page">
+
+  <header class="masthead">
+    <span class="eyebrow">Fnaf_CV — architecture reference</span>
+    <h1>Hands-free FNAF: gesture cursor + click, sensing to actuation</h1>
+    <p class="subhead">
+      MediaPipe tracks the hand every frame — its position drives the mouse cursor and its crop
+      feeds a transfer-learned classifier that reads <strong>palm</strong> (no click) vs.
+      <strong>fist</strong> (click). Confirmed clicks fire into the real game via simulated
+      DirectX input. Three subsystems: an offline training pipeline, an orchestration/deployment
+      layer added in Week 4, and the online real-time loop that actually plays the game.
+    </p>
+    <div class="meta-row">
+      <span>Author <b>Ted Roper</b></span>
+      <span>Status <b>Building</b></span>
+      <span>Diagram reflects <b>AD-25</b> (2026-07-28)</span>
+      <span>Source of truth <b class="mono">DOCS/build/architecture-and-decisions.md</b></span>
+    </div>
+  </header>
+
+  <section>
+    <h2>System diagram</h2>
+    <div class="blueprint">
+      <div class="blueprint-scroll">
+<pre class="mermaid">
+%%{init: {'theme': 'base', 'themeVariables': {
+  'fontFamily': 'Cascadia Code, JetBrains Mono, Consolas, monospace',
+  'fontSize': '13px',
+  'background': '#FBFAF7',
+  'primaryColor': '#FBFAF7',
+  'primaryBorderColor': '#1A2129',
+  'primaryTextColor': '#1A2129',
+  'lineColor': '#5B6470',
+  'edgeLabelBackground':'#FBFAF7',
+  'clusterBkg': '#F5F3EE',
+  'clusterBorder': '#C7CCD1',
+  'tertiaryColor': '#FBFAF7'
+}}}%%
+flowchart TD
+  subgraph OFFLINE["OFFLINE · training — src/data, src/models, train.py"]
+    direction TB
+    HAGRID["HaGRID annotations<br/>palm + fist only · AD-18"]
+    DATAPIPE["data pipeline<br/>parse → split by user_id (AD-16)<br/>crop to bbox +15% pad → transform"]
+    BACKBONE["timm backbone<br/>MobileNetV3 + fresh 2-class head"]
+    TRAINSTEP["train.py<br/>freeze → progressive unfreeze · AD-08"]
+    EXPORT["export<br/>ONNX + TorchScript, parity-checked · AD-11"]
+    HAGRID --> DATAPIPE --> BACKBONE --> TRAINSTEP --> EXPORT
+  end
+
+  subgraph ORCH["ORCHESTRATION & DEPLOYMENT · Week 4 — src/pipeline, src/serve"]
+    direction TB
+    DAG["pipeline/dag.py<br/>topo order · freshness cache · retries · AD-23"]
+    TASKS["pipeline/tasks.py<br/>ingest → split → tune → register → serve-check"]
+    TUNEBOX["tune.py<br/>Optuna TPE, cached-feature arm + control run · AD-22"]
+    REGISTRY[("MLflow Registry<br/>fnaf-click-classifier · champion alias · AD-24")]
+    SERVE["serve/app.py<br/>Flask /predict — validation only, not in RT loop"]
+    DAG --> TASKS --> TUNEBOX --> REGISTRY
+    REGISTRY --> SERVE
+  end
+
+  EXPORT --> REGISTRY
+
+  subgraph ONLINE["ONLINE · real-time loop — 28.3 FPS measured — src/rt, src/control"]
+    direction TB
+    WEBCAM["webcam"]
+    CAPTURE["capture.py<br/>threaded, newest-frame-only grabber"]
+    DETECT["detector.py<br/>MediaPipe Hands → 21-landmark hull<br/>pad 0.35 · AD-25"]
+    CURSOR["cursor.py<br/>palm anchor → adaptive control box<br/>EMA + dead-zone · AD-19"]
+    PRE["preprocess.py<br/>same build_transforms as training · §A.3"]
+    INFER["backends.py<br/>ONNX (default) / PyTorch<br/>fist vs. not_fist · AD-21"]
+    FSM["click_fsm.py<br/>K-frame debounce, edge-triggered<br/>re-arm on palm · AD-20"]
+    INPUT["input_sim.py<br/>pydirectinput SendInput<br/>move every frame + ~60ms click hold · AD-14"]
+    FNAF[("FNAF 1<br/>real Steam game, DirectX")]
+    WEBCAM --> CAPTURE --> DETECT
+    DETECT -->|hand position, every frame| CURSOR
+    DETECT -->|hull crop| PRE --> INFER --> FSM
+    CURSOR --> INPUT
+    FSM --> INPUT --> FNAF
+  end
+
+  REGISTRY -. loads champion .-> INFER
+
+  classDef offline fill:#E4EEEE,stroke:#1F6F6F,stroke-width:1.5px,color:#123B3B
+  classDef online fill:#FBEEDF,stroke:#B5651D,stroke-width:1.5px,color:#5C3A12
+  classDef orch fill:#E9E9F3,stroke:#5B5F97,stroke-width:1.5px,color:#2C2E52
+  classDef store fill:#1A2129,stroke:#1A2129,stroke-width:1.5px,color:#F5F3EE
+
+  class HAGRID,DATAPIPE,BACKBONE,TRAINSTEP,EXPORT offline
+  class WEBCAM,CAPTURE,DETECT,CURSOR,PRE,INFER,FSM,INPUT online
+  class DAG,TASKS,TUNEBOX,SERVE orch
+  class REGISTRY,FNAF store
+</pre>
+      </div>
+      <div class="blueprint-caption">solid arrow = per-frame data/control flow · dotted arrow = versioned artifact load · diagram kept as a fixed light sheet in both site themes, like a printed schematic</div>
+    </div>
+
+    <div class="legend">
+      <div class="legend-card">
+        <span class="legend-swatch"><span class="dot offline"></span>Offline</span>
+        <p>Runs once per training cycle on the local RTX 4060 (AD-02b). Produces a self-describing checkpoint — backbone, classes, and input spec travel with the weights.</p>
+      </div>
+      <div class="legend-card">
+        <span class="legend-swatch"><span class="dot orch"></span>Orchestration</span>
+        <p>Added Week 4. Event-triggered, not scheduled (<code>--if-data-changed</code>) — a static dataset has nothing to run on a clock. Moves the <code>champion</code> alias when a run wins.</p>
+      </div>
+      <div class="legend-card">
+        <span class="legend-swatch"><span class="dot online"></span>Online</span>
+        <p>The loop actually playing the game. One thread, ESC is a global kill-switch that freezes the cursor and releases any held click before disabling output.</p>
+      </div>
+      <div class="legend-card">
+        <span class="legend-swatch"><span class="dot store"></span>Artifact / game</span>
+        <p>The registry is the single answer to "which model is live"; FNAF is the unmodified Steam game, not a clone — every control is a hover or a click.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>The contract that keeps it honest</h2>
+    <div class="contract">
+      <span class="tag">§A.3</span>
+      <span class="body"><strong>Train/serve preprocessing must be byte-identical.</strong> <code>src/rt/preprocess.py</code> calls the same <code>build_transforms(train=False)</code> used offline — size, interpolation, normalization, crop policy all shared, not re-implemented. This is the most common cause of "great test accuracy, useless live."</span>
+    </div>
+    <div class="contract">
+      <span class="tag">AD-25</span>
+      <span class="body"><strong>The crop source half of that contract was violated, then measured and fixed (2026-07-28).</strong> Training pads HaGRID's annotated bbox; the live loop pads MediaPipe's 21-landmark hull — same 0.15 pad, two different boxes, and a hull runs ~0.77× smaller than a bbox. Worst on <code>fist</code> (0.705×), the one class that fires clicks. Live <code>pad</code> recalibrated 0.15 → 0.35; real fist click-rate at the FSM gate rose 81.5% → 94.4% with false clicks 0.7% → 0.0% on held-out stills. The live A/B against the actual running game is still open.</span>
+    </div>
+  </section>
+
+  <section>
+    <h2>Key decisions behind this shape</h2>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>AD</th><th>Decision</th><th>Why it's shaped this way</th></tr>
+        </thead>
+        <tbody>
+          <tr><td class="ad">AD-04</td><td class="decision">Two-stage: detect-then-classify</td><td>Full-frame classification hit only 57% val — the hand is &lt;5% of a typical frame. MediaPipe crops for free, no second model to train.</td></tr>
+          <tr><td class="ad">AD-17</td><td class="decision">Pivot to cursor + click (not a gesture vocabulary)</td><td>FNAF is entirely mouse-driven. One universal interaction beats an 8-gesture map where every misread was a wrong in-game action.</td></tr>
+          <tr><td class="ad">AD-18 / AD-21</td><td class="decision">Binary head: <code>fist</code> vs. <code>not_fist</code></td><td>Palm/fist is the maximal-separation pair; widening the negative class to six gestures makes "unknown pose → no click" the model's default.</td></tr>
+          <tr><td class="ad">AD-19</td><td class="decision">Adaptive-control-box cursor mapping</td><td>Fixed absolute mapping made cursor gain distance-dependent; box width now scales with palm span so the same arm motion moves the cursor the same amount at any distance.</td></tr>
+          <tr><td class="ad">AD-20</td><td class="decision">Edge-triggered click, K-frame debounce</td><td>FNAF has no drag/hold interaction, so hold-while-fist buys nothing and adds a flicker failure mode. Re-arm requires a confirmed palm — double-fires become structurally impossible.</td></tr>
+          <tr><td class="ad">AD-23</td><td class="decision">A ~200-line local DAG, not Airflow</td><td>One machine, a static dataset, nothing arrives on a clock — a scheduler daemon would be ceremony with no job to do.</td></tr>
+          <tr><td class="ad">AD-24</td><td class="decision">MLflow registry + self-preprocessing pyfunc</td><td>Preprocessing is half the train/serve contract; bundling it in the versioned artifact makes drift structurally impossible for a served model.</td></tr>
+          <tr><td class="ad">AD-25</td><td class="decision">Recalibrate live crop pad, 0.15 → 0.35</td><td>Closed a hull-vs-bbox geometry gap that was silently starving the classifier's confidence on real fists — see contract callout above.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <footer>
+    <span>Full record: <code class="mono">DOCS/build/architecture-and-decisions.md</code></span>
+    <span>Roadmap: <code class="mono">DOCS/build/plan.md</code></span>
+    <span>File-by-file map: <code class="mono">DOCS/build/code-map.md</code></span>
+    <span>Crop-geometry write-up: <code class="mono">DOCS/build/strategies/3-cursor-and-click/03.2.4-crop-geometry-and-pad.md</code></span>
+  </footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+<script>
+  mermaid.initialize({ startOnLoad: true, theme: 'base' });
+</script>

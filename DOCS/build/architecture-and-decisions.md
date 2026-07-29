@@ -15,6 +15,10 @@ This document records **how the system is built** (Part A — Architecture) and 
 
 ## A.1 System overview
 
+> A designed, colored version of the diagram below — with a legend, the §A.3
+> contract callout, and a table of the key ADs — lives in
+> [DOCS/build/diagrams/](diagrams/README.md).
+
 The system is a **real-time perception → decision → actuation loop**. A webcam streams frames; a **hand detector (MediaPipe) finds the hand** in each frame and does two jobs with it: its **position drives the mouse cursor** (absolute frame→screen mapping, AD-19), and its **bbox crops the hand** for a CNN that makes a **binary palm/fist** call (AD-18); a debounced click state machine turns confirmed palm→fist transitions into **single mouse clicks** (AD-20); an input-simulation layer issues the cursor moves and clicks to the real game. The **two-stage detect-then-classify** backbone of this design is AD-04; the cursor-control pivot is AD-17.
 
 ```

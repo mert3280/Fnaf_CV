@@ -1,15 +1,77 @@
 # Plan v2 — Hands-free FNAF via cursor control
 
-> **Status 2026-07-26:** Steps 1–2 **done and now tuned** (AD-21 fist-vs-rest is the
-> deployed model; Week-4 tuning + MLflow registry + serving endpoint landed — see the
-> [Week-4 update](#week-4-update-2026-07-26--on-track-tuning--pipeline-done-step-5-still-the-gate)).
-> Steps 3–4 **code-complete and offline-verified** (`src/rt/cursor.py`,
-> `src/control/click_fsm.py`, HUD preview in `webcam_demo`). Step 5 **built,
-> not yet run against the game** (`src/control/play.py` + `input_sim.py`; the
-> in-game registration test and all live tuning are Ted's) — **this is the
-> outstanding gate.** Step 6 not started.
+> **Status 2026-07-29 (final):** Steps 1–5 **done**. **Night 1 of FNAF has been
+> completed hands-free** — the headline success criterion — on
+> `fistvsrest_frozen_mnv3_large`, with rough edges and no recording (see the
+> [Week-5 final status](#week-5-final-status-2026-07-29--mvp-met-honestly-scoped)).
+> Step 6 **partially done**: the eval dashboard, calibration notes, and the
+> written record are in; the recorded demo video and the multi-subject robustness
+> passes are not. Two things I chose not to do are recorded as such below, not
+> quietly dropped: the **landmark-hull retrain** (AD-25's principled fix) and
+> **instrumented live measurement** of the game session.
+>
+> *Previous status (2026-07-26): Steps 1–2 done and tuned; Steps 3–4
+> code-complete and offline-verified; Step 5 built but never run against the
+> game — see the
+> [Week-4 update](#week-4-update-2026-07-26--on-track-tuning--pipeline-done-step-5-still-the-gate).*
 
-**Effective 2026-07-14** (the [AD-17](architecture-and-decisions.md#ad-17--pivot-to-cursor-control-motion-tracked-cursor--binary-click-classifier)
+## Week-5 final status (2026-07-29) — MVP met, honestly scoped
+
+**Did I hit the MVP? Yes, on the headline criterion, and I want to be exact about
+what that does and doesn't mean.**
+
+### Completed
+
+| Success criterion (from the proposal) | Result |
+|---|---|
+| **1. Complete FNAF Night 1 entirely hands-free** | **Met.** Cursor and clicks both hand-driven end to end, on `fistvsrest_frozen_mnv3_large` (AD-21). |
+| **2. Honest numbers — test accuracy reported once, plus the live metrics that matter** | **Partially met.** Offline: reported once per AD-10, and flagged as **saturated** (327/327). Live: 11 timed obstacle-course trials measure cursor precision and click reliability; the *game session itself* was not instrumented. |
+| **3. Learning objective — the transfer-learning story fully exercised** | **Met.** Freeze → linear probe on cached features → 2 blocks unfrozen + augmentation, plus the head-init finding (AD-22) and the crop-geometry finding (AD-25), both of which came out of controlled re-runs rather than curves alone. |
+
+Also landed in Week 5: the **business-facing UI** deliverables
+([walkthrough](../class-related/week5/ui-walkthrough.md),
+[non-technical guide](../class-related/week5/how-to-use.md), 12 screenshots
+regenerable via `scripts/capture_ui_screenshots.js`), a rewritten root
+`README.md`, the [project retrospective](../class-related/week5/retrospective.md),
+and the AI-documentation close-out.
+
+### The gap between "it worked" and "I measured it working"
+
+The headline result is the **least-measured** thing in the project, and that is
+the honest weakness of this delivery. The Night-1 run was played, not logged:
+no per-frame confidences, no FSM transition record, no video. What I can report is
+that it completed and that it was rough — missed clicks and re-squeezes, stretches
+of fighting the cursor rather than playing. Everything numeric in this repo is
+either offline (HaGRID crops) or from the obstacle course.
+
+**The most interesting consequence:** the checkpoint that beat the game is
+`fistvsrest_frozen_mnv3_large`, **not** the registered `champion`
+(`week4_tuned_fistvsrest`) that scores 1.0000 offline. The champion has still
+never been validated live. That's not evidence the tuned model is worse — it's
+evidence that my offline benchmark stopped being able to tell me which model to
+deploy, which is exactly what AD-22's saturation note predicted.
+
+### Descoped, and why
+
+| Descoped | Why |
+|---|---|
+| **Retrain on landmark-hull crops** (AD-25's principled fix) | It makes the live crop a 1.00× match *by construction* instead of via a compromise scalar pad (the equalizing pad is 0.42 for `fist`, 0.27 for `palm`). But it **re-bases every accuracy number this project has published**, and I was not going to spend the final week invalidating my own evidence base for a fix whose measured benefit (94.4% vs 100% fist click-rate) is a fraction of what's already banked. Recorded as open, not solved. |
+| **Instrumented live gameplay** | The right thing to build, and the thing I'd build first with more time. Cut for time once Night 1 went through — which is precisely the wrong reason and I'm saying so. |
+| **Self-capture fine-tune at cursor distances** (Step 2 follow-up) | Arm's-length hands are the regime HaGRID lacks. `src/rt/capture_dataset.py` exists and works; the dataset was never collected. The offline gains from tuning + AD-25 turned out to be enough to play, so this stayed a known-unclosed gap rather than a blocker. |
+| **Recorded demo video** (Step 6) | Not captured during the successful session. No second attempt was made before the deadline. |
+| **Multi-subject usability evaluation** | All 11 obstacle-course trials are my own hands. The harness is built and takes 90 seconds per run — this was a scheduling failure, not a technical one. |
+| **`struct_unfreeze2_auglive` live A/B** | Tied the champion on val, was passed over by an arbitrary tie-break, and is the best of the five at the deployed pad (85.2% vs 81.5% fist click-rate) but worse on false clicks (3.6% vs 0.7%). Still worth an A/B; never run. |
+| **Open-set metric re-run under live geometry** | Every false-click number published (including 3.2's headline unseen-`ok` 0.8%) was measured on annotated crops and is optimistic by an unmeasured amount. Known, unquantified. |
+
+### What did NOT change in Week 5
+
+No model was retrained, no FSM value moved, no default was flipped. The last
+code change to the control path was AD-25's `pad` 0.15 → 0.35 on 2026-07-28. Week
+5 was UI polish, documentation, and the live run — plus one CSS fix found while
+capturing screenshots (`[hidden]` was being overridden by author `display` rules,
+so the status chip showed a permanent `connecting…`).
+
+**Effective 2026-07-14** (the [AD-17](architecture-and-decisions.md#ad-17--pivot-to-cursor-control-motion-tracked-cursor--binary-click-classifier--accepted)
 scope pivot). This replaces the phase plans now archived in
 [../legacy/phases/](../legacy/README.md); the design itself is specified
 in [Strategy 3](strategies/3-cursor-and-click/03-cursor-and-click.md).
