@@ -1,6 +1,6 @@
 # Claude / AI Usage Plan
 
-> This file states my **intent** for using Claude and other AI tools on this project. It is a living document and will be updated each week. The actual week-by-week record of what I used AI for lives in [AI-usage.md](AI-usage.md). The agent-context file that tells Claude its role and guardrails on this repo is at the repo root: [`CLAUDE.md`](../CLAUDE.md).
+> **Status: final (2026-07-29).** This file began as a statement of **intent** and was revised weekly; it now records how AI was **actually** used across the five weeks. Where the plan and reality diverged, [§How it actually went](#how-it-actually-went-final-2026-07-29) says so rather than editing the original intent to match. The week-by-week record and the closing AI retrospective live in [AI-usage.md](AI-usage.md). The agent-context file that tells Claude its role and guardrails on this repo is at the repo root: [`CLAUDE.md`](../../CLAUDE.md).
 
 ## Guiding principle
 
@@ -30,12 +30,13 @@ AI is used to **accelerate scaffolding and debugging, not to replace the learnin
 
 ## Tools
 
-- **Claude Code** (primary) — in-repo agent for scaffolding, debugging, docs, and code review, governed by [`CLAUDE.md`](../CLAUDE.md).
+- **Claude Code** (primary) — in-repo agent for scaffolding, debugging, docs, and code review, governed by [`CLAUDE.md`](../../CLAUDE.md).
 - **Claude (chat)** — design discussion and concept explanation (transfer learning, ONNX export).
 - **MLflow** (added Week 3; **Model Registry** added Week 4) — experiment store for the training runs and the version/alias record for the deployed model. Claude wrote the logging/export/registration glue (`scripts/mlflow_*.py`, `src/serve/pyfunc_model.py`); **I own which metrics matter and the honesty of every number logged.**
 - **Optuna** (added Week 4) — the TPE sampler behind the hyper-parameter search in `src/tune.py`. Claude wrote the search harness; **I own the search space, the budget, and the reading of the results.**
 - **Flask + ONNX Runtime** (added Week 4) — the inference endpoint and the parity-checked export (AD-11/AD-24). Serving plumbing is squarely in the "AI may drive" column.
-- Possible: Copilot-style inline completion for small boilerplate.
+- **Playwright** (added Week 4–5) — headless-browser verification of the eval dashboard, and then `scripts/capture_ui_screenshots.js`, which regenerates the Week-5 UI screenshots by driving the real app. This one changed how I think about AI verification: it means Claude can *check the UI it wrote actually works* instead of reporting that it should.
+- Copilot-style inline completion for small boilerplate — **never adopted**; Claude Code in the repo covered it.
 
 ## Honesty & attribution policy
 
@@ -43,9 +44,25 @@ AI is used to **accelerate scaffolding and debugging, not to replace the learnin
 - AI-generated code that I do not understand does not get merged. If I cannot explain it, I rewrite it until I can.
 - Commit messages note where AI materially shaped an implementation.
 
+## How it actually went (final, 2026-07-29)
+
+The plan above survived five weeks essentially intact, which surprised me. What changed is not *where* I used AI but *what I used it for* — and one line of the plan turned out to be worth more than all the rest.
+
+**The line that earned its keep.** "I must drive: interpretation of training curves… AI is a *sounding board*, never the decision-maker." In practice that stopped being a matter of principle and became a working method: **make the new code reproduce the old number before believing a new one.** It caught two conclusions that would otherwise have gone into reports as findings — the ~5-point "tuning win" that was really timm's 2-class head init (AD-22), and my own confident "the model is overfit" diagnosis that was really a train/serve crop-geometry mismatch (AD-25). Both times the correction came from a control run I had asked for. Neither would have surfaced from a prompt that asked for a fix.
+
+**The pattern that emerged and became standard.** Every time Claude was in a position to change a project default, it shipped the change as an **opt-in flag with the old default preserved** and recorded the adoption question as a **Proposed** decision record pending my call — AD-22 (head init) and AD-25 (crop pad) both went through that gate, and AD-25 I later accepted explicitly. This wasn't in the original plan. It's the mechanism that actually enforced it.
+
+**Where my usage exceeded the plan.** The plan's "Documentation" row anticipated docstrings and READMEs. What actually happened is that AI wrote most of the project's *evidence-generation* layer: the tuning harness, the DAG engine, the serving artifact, the measurement scripts (`eval_crop_geometry.py`, `bench_pipeline.py`, `audit_split_leakage.py`), the diagram rendered from the DAG definitions, and the usability dashboard. That is far more than "boilerplate and glue," and I'm recording it as an honest expansion rather than pretending it fit the Week-0 table. What kept it inside the spirit of the plan is that none of it makes a modeling decision — it produces numbers, and reading them stayed mine.
+
+**Where the plan was too optimistic.** "I confirm the *root cause*, not just the patch" held for ML bugs but not for infrastructure ones: several root causes (thread-pool contention starving MediaPipe, 67 ms of camera backlog, a 0 ms click pulse a DirectX game can't see, a missing `sim.tick()` leaving the mouse button stuck down, `[hidden]` losing to an author `display` rule) were found by Claude measuring, and I confirmed them by reading the evidence rather than by independently deriving them. That's a weaker form of ownership than the plan implies, and it's the honest version.
+
+**What I would put in this file if I were starting over.** One extra row: *"Before you believe a number from a new harness, make the harness reproduce the old number."* It is the only rule here that changed an outcome twice.
+
 ## Weekly update cadence
 
 At the end of each week I will: (1) append that week's entry to `AI-usage.md`, and (2) revise this file if my intended usage changed (e.g. I leaned on AI more/less than planned, or a new tool entered the workflow).
+
+**Week-5 note (2026-07-29) — final.** One **new tool** entered the workflow: **Playwright** (logged above), used first to verify the dashboard overhaul against a real running server and then to make the Week-5 UI screenshots a regenerable artifact rather than a manual chore. Usage matched the plan, and the boundary held on the two calls that came up: the crop-tightness default (AD-25) moved **only** at my explicit direction, and the MVP verdict — that Night 1 completed hands-free but is the *least-measured* result in the project, on a checkpoint that is not the registered champion — is my reading, not a drafted one. The one thing AI did this week that I hadn't asked for and kept: when told to "make sure all the deliverables are met," it stopped and asked where Step 5 actually landed instead of inferring it from a repo that still said "built, not run against the game." Closing AI retrospective: [AI-usage.md → Final retrospective](AI-usage.md#final-retrospective--ai-usage-across-the-project).
 
 **Week-2 note (2026-07-12):** usage matched the plan — AI drove the EDA notebook, the overfit-single-batch validation, and the data-understanding report scaffolding; I retained the modeling calls those docs report (crop adoption, by-user split, ≥90% target). The living plan now lives in [implementation-plan.md](../legacy/phases/implementation-plan.md) *(moved to legacy with the 2026-07-14 pivot — current plan: [plan.md](../build/plan.md))*, and the Week-2 deliverables in [week2/](../class-related/week2/).
 
