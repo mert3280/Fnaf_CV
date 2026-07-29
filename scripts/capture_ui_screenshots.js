@@ -78,10 +78,24 @@ async function main() {
   await sleep(400);
   await shot(page, "03-overview-comparison-chart.png");
 
-  await page.evaluate(() => { document.getElementById("screen-welcome").scrollTop = 1e6; });
+  // Same tab, filtered + re-charted + re-sorted, so the screenshot shows the
+  // controls doing something rather than repeating the view above.
+  await page.selectOption("#ovModel", { label: "fistvsrest_frozen_mnv3_large" });
+  await page.selectOption("#ovBarMetric", "ob3Accuracy");
+  await page.selectOption("#ovColorBy", "strategy");
+  await page.selectOption("#ovSort", "ob3Accuracy");
+  await page.selectOption("#ovSortDir", "worst");
+  await sleep(500);
+  await page.evaluate(() => {
+    const el = document.getElementById("screen-welcome");
+    el.scrollTop = document.getElementById("ovCharts").offsetTop - 80;
+  });
   await sleep(400);
-  await shot(page, "04-overview-trial-table.png");
+  await shot(page, "04-overview-filtered-and-sorted.png");
 
+  await clickCenter(page, "#ovClear");
+  await page.selectOption("#ovSort", "date");
+  await page.selectOption("#ovSortDir", "best");
   await page.evaluate(() => { document.getElementById("screen-welcome").scrollTop = 0; });
   await clickCenter(page, "#tabHelp");
   await sleep(400);
