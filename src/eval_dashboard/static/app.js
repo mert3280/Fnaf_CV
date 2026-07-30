@@ -598,7 +598,11 @@ function updateWelcome(s) {
     trackBtn.disabled = true; trackBtn.textContent = "Hand tracker on ✓";
     hint.textContent = "Camera on — use your hand. Fist = click, open palm = release.";
     startBtn.disabled = false;
-  } else if (!trackerStarting) {
+  } else if (trackerStarting) {
+    trackBtn.disabled = true; trackBtn.textContent = "Starting camera…";
+    hint.textContent = "Loading the model and opening the camera…";
+    startBtn.disabled = true;
+  } else {
     trackBtn.disabled = false; trackBtn.textContent = "1 · Start hand tracker";
     hint.textContent = "Click this with your mouse to turn the camera on.";
     startBtn.disabled = true;
